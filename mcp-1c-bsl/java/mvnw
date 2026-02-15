@@ -1,0 +1,37 @@
+#!/bin/sh
+# Maven Wrapper: при первом запуске скачивает Maven и wrapper jar.
+set -e
+MVN_DIR="$(cd "$(dirname "$0")" && pwd)"
+WRAPPER_DIR="$MVN_DIR/.mvn/wrapper"
+WRAPPER_JAR="$WRAPPER_DIR/maven-wrapper.jar"
+PROPS="$WRAPPER_DIR/maven-wrapper.properties"
+
+if [ ! -f "$WRAPPER_JAR" ]; then
+  if [ ! -f "$PROPS" ]; then
+    echo "Файл $PROPS не найден." >&2
+    exit 1
+  fi
+  wrapperUrl=$(grep '^wrapperUrl=' "$PROPS" | cut -d= -f2-)
+  if [ -z "$wrapperUrl" ]; then
+    echo "wrapperUrl не задан в $PROPS" >&2
+    exit 1
+  fi
+  mkdir -p "$WRAPPER_DIR"
+  echo "Загрузка Maven Wrapper..." >&2
+  if command -v curl >/dev/null 2>&1; then
+    curl -sL -o "$WRAPPER_JAR" "$wrapperUrl"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -O "$WRAPPER_JAR" "$wrapperUrl"
+  else
+    echo "Нужен curl или wget для загрузки wrapper." >&2
+    exit 1
+  fi
+fi
+
+if ! command -v java >/dev/null 2>&1; then
+  echo "Java не найдена в PATH." >&2
+  exit 1
+fi
+
+cd "$MVN_DIR"
+exec java -Dmaven.multiModuleProjectDirectory="$MVN_DIR" -cp "$WRAPPER_JAR" org.apache.maven.wrapper.MavenWrapperMain "$@"

@@ -1,0 +1,41 @@
+[
+  {
+    "id": "doc.РеализацияТоваров",
+    "type": "Document",
+    "name": "РеализацияТоваров",
+    "synonym": "Реализация товаров",
+    "props": [
+      {"name": "Номер", "type": "Number", "synonym": "Номер"},
+      {"name": "Дата", "type": "DateTime", "synonym": "Дата"},
+      {"name": "Контрагент", "type": "CatalogRef.Контрагенты", "synonym": "Контрагент"}
+    ],
+    "tabularSections": [],
+    "forms": ["ФормаДокумента"],
+    "modules": ["ObjectModule", "ManagerModule"],
+    "description": "Документ реализации товаров"
+  },
+  {
+    "id": "cat.Контрагенты",
+    "type": "Catalog",
+    "name": "Контрагенты",
+    "synonym": "Контрагенты",
+    "props": [
+      {"name": "Наименование", "type": "String", "synonym": "Наименование"}
+    ],
+    "tabularSections": [],
+    "forms": ["ФормаЭлемента"],
+    "modules": ["ObjectModule"],
+    "description": "Справочник контрагентов"
+  },
+  {
+    "id": "CommonModule.ОбщийМодульКлиент",
+    "type": "CommonModule",
+    "name": "ОбщийМодульКлиент",
+    "synonym": "Общий модуль клиент",
+    "props": [],
+    "tabularSections": [],
+    "forms": [],
+    "modules": [],
+    "description": "Общий модуль клиентских процедур"
+  }
+]

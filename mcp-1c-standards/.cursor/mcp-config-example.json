@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "1c-standards": {
+      "command": "<ABSOLUTE_PATH_TO>/mcp-1c-standards/mcp-1c-standards"
+    }
+  }
+}

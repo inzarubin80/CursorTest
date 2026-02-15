@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: ru.mcp.bsl.Mcp1cBslServerIntegrationTest
+-------------------------------------------------------------------------------
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.383 s -- in ru.mcp.bsl.Mcp1cBslServerIntegrationTest
