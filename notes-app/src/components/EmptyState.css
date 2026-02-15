@@ -9,6 +9,11 @@
   color: var(--text-muted);
 }
 
+.empty-state-icon {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
 .empty-state-message {
   font-size: 1.125rem;
   font-weight: 700;
@@ -19,15 +24,4 @@
 .empty-state-hint {
   font-size: 0.9375rem;
   margin: 0;
-}
-
-.empty-state-button {
-  margin-top: 0.5rem;
-  background: var(--accent);
-  color: #fff;
-  padding: 0.75rem 1.5rem;
-}
-
-.empty-state-button:hover {
-  background: var(--accent-hover);
 }

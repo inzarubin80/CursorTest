@@ -17,8 +17,12 @@
   --accent: #1d9bf0;
   --accent-hover: #1a8cd8;
   --danger: #f4212e;
+  --success: #0a6b0a;
   --hover: rgba(15, 20, 25, 0.03);
   --shadow: rgba(101, 119, 134, 0.2);
+  --radius-pill: 9999px;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -30,6 +34,7 @@
     --border: #2f3336;
     --hover: rgba(231, 233, 234, 0.03);
     --shadow: rgba(0, 0, 0, 0.3);
+    --success: #2ecc71;
   }
 }
 
@@ -50,7 +55,7 @@ body {
 }
 
 button {
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   border: none;
   padding: 0 1em;
   min-height: 36px;

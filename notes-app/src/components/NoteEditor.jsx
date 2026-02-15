@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import './NoteEditor.css';
 
 /**
@@ -7,11 +7,6 @@ import './NoteEditor.css';
 export default function NoteEditor({ note, onSave }) {
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
-
-  useEffect(() => {
-    setTitle(note.title);
-    setBody(note.body);
-  }, [note.id, note.title, note.body]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
