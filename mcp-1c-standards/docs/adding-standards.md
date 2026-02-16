@@ -43,16 +43,16 @@ python3 scripts/fetch_standards.py
 
 - запрашивает страницы `https://v8std.ru/std/<id>/`;
 - конвертирует HTML в Markdown;
-- сохраняет результат в `content/std-<id>.md`;
+- сохраняет результат в `internal/tools/content/std-<id>.md`;
 - если страница не найдена (404) или слишком короткая, файл не создаётся (или не перезаписывается).
 
-Проверьте, что в каталоге `content/` появился файл `std-<id>.md`. Если на v8std.ru этого стандарта нет, файл можно подготовить вручную и положить в `content/` с именем `std-<id>.md`.
+Проверьте, что в каталоге `internal/tools/content/` появился файл `std-<id>.md`. Если на v8std.ru этого стандарта нет, файл можно подготовить вручную и положить в `internal/tools/content/` с именем `std-<id>.md`.
 
 ## 4. Добавить раздел в lookup.json
 
-Чтобы инструмент **standards_lookup** по запросу с `topic: <id>` возвращал полный текст и ссылку на ИТС, нужно добавить запись в `content/lookup.json`.
+Чтобы инструмент **standards_lookup** по запросу с `topic: <id>` возвращал полный текст и ссылку на ИТС, нужно добавить запись в `internal/tools/content/lookup.json`.
 
-Откройте `content/lookup.json`. В массиве `sections` добавьте объект (можно в конец, перед закрывающей `]`):
+Откройте `internal/tools/content/lookup.json`. В массиве `sections` добавьте объект (можно в конец, перед закрывающей `]`):
 
 ```json
 {
@@ -83,41 +83,29 @@ python3 scripts/fetch_standards.py
 
 Сохраните `lookup.json`. Проверьте, что JSON корректен (запятые, кавычки, скобки).
 
-## 5. Обновить встроенный контент (embed) и пересобрать
+## 5. Пересобрать бинарник
 
-Чтобы новый стандарт был доступен и при запуске без каталога `content/` (только из бинарника), нужно положить файлы во встраиваемый контент и пересобрать проект:
+Контент хранится в одном каталоге `internal/tools/content/` (он же встраивается в бинарник через embed). После добавления или обновления файлов пересоберите проект:
 
-1. Скопировать новый файл стандарта в `internal/tools/content/`:
-   ```bash
-   cp content/std-<id>.md internal/tools/content/
-   ```
+```bash
+go build -o mcp-1c-standards .
+```
 
-2. Скопировать обновлённый `lookup.json`:
-   ```bash
-   cp content/lookup.json internal/tools/content/
-   ```
-
-3. Пересобрать бинарник:
-   ```bash
-   go build -o mcp-1c-standards .
-   ```
-
-После этого вызов **standards_lookup** с `topic: <id>` будет возвращать полный текст из `std-<id>.md` (из каталога контента или из embed).
+После этого вызов **standards_lookup** с `topic: <id>` будет возвращать полный текст из `std-<id>.md` (из каталога при запуске из репозитория или из embed в бинарнике).
 
 ## 6. Добавить стандарт без v8std.ru (вручную)
 
 Если стандарта нет на v8std.ru или нужен свой текст:
 
-1. Создайте файл `content/std-<id>.md` с содержимым в Markdown.
-2. Выполните шаги **4** и **5**: добавьте запись в `content/lookup.json` с `localFile: "std-<id>.md"` и при необходимости скопируйте файл и `lookup.json` в `internal/tools/content/`, затем выполните `go build`.
+1. Создайте файл `internal/tools/content/std-<id>.md` с содержимым в Markdown.
+2. Выполните шаги **4** и **5**: добавьте запись в `internal/tools/content/lookup.json` с `localFile: "std-<id>.md"` и выполните `go build`.
 
 ## Краткий чеклист
 
 - [ ] Узнать ID стандарта (ИТС или скрипт).
 - [ ] При необходимости добавить ID в `scripts/fetch_standards.py` → `ALL_STD_IDS`.
-- [ ] Запустить `python3 scripts/fetch_standards.py [id]` или вручную создать `content/std-<id>.md`.
-- [ ] Добавить запись в `content/lookup.json` (id, title, summary, url, localFile).
-- [ ] Скопировать `content/std-<id>.md` и `content/lookup.json` в `internal/tools/content/`.
+- [ ] Запустить `python3 scripts/fetch_standards.py [id]` или вручную создать `internal/tools/content/std-<id>.md`.
+- [ ] Добавить запись в `internal/tools/content/lookup.json` (id, title, summary, url, localFile).
 - [ ] Выполнить `go build -o mcp-1c-standards .`.
 
 Готовый стандарт будет доступен через **standards_lookup** по `topic: <id>`.

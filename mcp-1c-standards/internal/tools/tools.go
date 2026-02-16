@@ -35,15 +35,15 @@ func readContent(name string) ([]byte, error) {
 }
 
 type DocCommentParams struct {
-	Topic string `json:"topic" jsonschema:"description=Тема: параметры, возвращаемое значение, пример, структура (опционально)"`
+	Topic string `json:"topic" jsonschema:"Тема: параметры, возвращаемое значение, пример, структура (опционально)"`
 }
 
 type LookupParams struct {
-	Topic string `json:"topic" jsonschema:"description=ID раздела (453, 641, doc-comment, naming, formatting) или ключевое слово для поиска"`
+	Topic string `json:"topic" jsonschema:"ID раздела (453, 641, doc-comment, naming, formatting) или ключевое слово для поиска"`
 }
 
 type CheckCommentParams struct {
-	CommentText string `json:"commentText" jsonschema:"description=Текст документирующего комментария для проверки"`
+	CommentText string `json:"commentText" jsonschema:"Текст документирующего комментария для проверки"`
 }
 
 type lookupData struct {

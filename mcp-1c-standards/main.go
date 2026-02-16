@@ -26,6 +26,9 @@ func contentRoot() string {
 		if d := filepath.Join(cwd, "content"); dirExists(d) {
 			return d
 		}
+		if d := filepath.Join(cwd, "internal", "tools", "content"); dirExists(d) {
+			return d
+		}
 	}
 	return ""
 }

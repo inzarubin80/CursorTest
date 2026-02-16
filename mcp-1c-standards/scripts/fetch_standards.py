@@ -14,7 +14,7 @@ import urllib.request
 from html import unescape
 from pathlib import Path
 
-CONTENT_DIR = Path(__file__).resolve().parent.parent / "content"
+CONTENT_DIR = Path(__file__).resolve().parent.parent / "internal" / "tools" / "content"
 BASE = "https://v8std.ru/std"
 
 # Соглашения при написании кода (31): Оформление модулей (32), Конструкции (33), Прикладные объекты (34)
