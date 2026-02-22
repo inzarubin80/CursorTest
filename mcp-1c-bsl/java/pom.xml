@@ -45,6 +45,12 @@
             <artifactId>jetty-ee10-servlet</artifactId>
             <version>12.0.6</version>
         </dependency>
+        <!-- Убирает предупреждение SLF4J "No SLF4J providers" при запуске (NOP = без вывода в консоль) -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-nop</artifactId>
+            <version>2.0.9</version>
+        </dependency>
         <!-- Тесты: проверка, что сервер помогает писать код на 1С -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
