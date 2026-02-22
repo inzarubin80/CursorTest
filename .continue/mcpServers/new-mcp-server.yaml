@@ -8,5 +8,5 @@ mcpServers:
       - -jar
       - /Users/izarubin/CursorTest/mcp-1c-bsl/java/target/mcp-1c-bsl-0.1.0-all.jar
       - --bsl-language-server-jar
-      - /Users/izarubin/CursorTest/mcp-1c-bsl/bsl-language-server/bsl-language-server.jar
+      - /Users/izarubin/CursorTest/mcp-1c-bsl/bsl-language-server/bsl-language-server-0.28.5-exec.jar
     env: {}
