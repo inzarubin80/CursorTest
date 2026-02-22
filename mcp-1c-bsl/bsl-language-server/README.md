@@ -1,18 +1,20 @@
 # BSL Language Server (JAR)
 
-Сюда нужно положить JAR-файл [BSL Language Server](https://github.com/1c-syntax/bsl-language-server/releases), чтобы MCP-сервер mcp-1c-bsl использовал его без настройки переменной окружения.
+Сюда кладут JAR [BSL Language Server](https://github.com/1c-syntax/bsl-language-server/releases), чтобы MCP-сервер mcp-1c-bsl использовал его для анализа и форматирования BSL/1С.
 
-## Как установить
+## Текущая версия в каталоге
 
-1. Скачайте последний релиз с [Releases](https://github.com/1c-syntax/bsl-language-server/releases) (файл `bsl-language-server-<version>.jar` или аналогичный).
-2. Переименуйте или скопируйте JAR в этот каталог с именем **`bsl-language-server.jar`**:
+**v0.28.5** — файл `bsl-language-server-0.28.5-exec.jar` (скачан с [Releases](https://github.com/1c-syntax/bsl-language-server/releases/tag/v0.28.5)).
 
-   ```bash
-   cd mcp-1c-bsl/bsl-language-server
-   # после скачивания, например:
-   mv ~/Downloads/bsl-language-server-*.jar bsl-language-server.jar
-   ```
+При настройке MCP укажите полный путь к этому JAR в аргументе `--bsl-language-server-jar` или в переменной `BSL_LANGUAGE_SERVER_JAR`.
 
-3. Соберите и запускайте MCP-сервер из корня проекта или из `java/` — JAR будет найден автоматически.
+## Как обновить
 
-Приоритет поиска JAR: переменная окружения `BSL_LANGUAGE_SERVER_JAR` → `bsl-language-server/bsl-language-server.jar` (относительно проекта) → `bsl-language-server.jar` в текущей директории.
+1. Скачайте последний релиз с [Releases](https://github.com/1c-syntax/bsl-language-server/releases) (файл **`bsl-language-server-<version>-exec.jar`**).
+2. Положите JAR в этот каталог (имя можно не менять).
+3. В конфиге MCP укажите путь к новому файлу, например:  
+   `--bsl-language-server-jar .../bsl-language-server/bsl-language-server-0.28.6-exec.jar`
+
+Для авто-поиска без аргумента можно положить JAR с именем **`bsl-language-server.jar`** — тогда сервер найдёт его при запуске из корня проекта или из `java/`.
+
+Приоритет поиска JAR: аргумент `--bsl-language-server-jar` → переменная `BSL_LANGUAGE_SERVER_JAR` → `bsl-language-server/bsl-language-server.jar` (относительно проекта) → `bsl-language-server.jar` в текущей директории.
