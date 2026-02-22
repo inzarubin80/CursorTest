@@ -14,18 +14,41 @@ import java.util.concurrent.TimeUnit;
 /**
  * Запуск BSL Language Server в режиме analyze или format (subprocess).
  * Требуется только JVM: BSL LS — отдельный JAR, тот же движок, что и в SonarQube BSL Plugin.
+ * Поиск JAR: BSL_LANGUAGE_SERVER_JAR → bsl-language-server/bsl-language-server.jar (в проекте) → cwd/bsl-language-server.jar.
  */
 public final class BslRunner {
 
-    private static final String DEFAULT_JAR = "bsl-language-server.jar";
+    private static final String JAR_NAME = "bsl-language-server.jar";
+    private static final String PROJECT_SERVER_DIR = "bsl-language-server";
     private static final String REPORT_FILE = "bsl-json.json";
 
     private final String jarPath;
     private final ObjectMapper json = new ObjectMapper();
 
     public BslRunner() {
+        this.jarPath = resolveJarPath();
+    }
+
+    /**
+     * Порядок поиска: 1) BSL_LANGUAGE_SERVER_JAR, 2) bsl-language-server/bsl-language-server.jar (от cwd),
+     * 3) ../bsl-language-server/bsl-language-server.jar (если cwd = java/), 4) bsl-language-server.jar в cwd.
+     */
+    private static String resolveJarPath() {
         String env = System.getenv("BSL_LANGUAGE_SERVER_JAR");
-        this.jarPath = env != null && !env.isBlank() ? env : DEFAULT_JAR;
+        if (env != null && !env.isBlank()) {
+            return env;
+        }
+        Path cwd = Paths.get("").toAbsolutePath();
+        Path inProject = cwd.resolve(PROJECT_SERVER_DIR).resolve(JAR_NAME);
+        if (Files.isRegularFile(inProject)) {
+            return inProject.toString();
+        }
+        Path inProjectFromJava = cwd.resolve("..").resolve(PROJECT_SERVER_DIR).resolve(JAR_NAME).normalize();
+        if (Files.isRegularFile(inProjectFromJava)) {
+            return inProjectFromJava.toString();
+        }
+        Path inCwd = cwd.resolve(JAR_NAME);
+        return inCwd.toString();
     }
 
     public String getJarPath() {
@@ -43,7 +66,7 @@ public final class BslRunner {
     public String analyze(String srcDir) {
         if (!isJarAvailable()) {
             return "Ошибка: JAR BSL Language Server не найден: " + jarPath
-                    + ". Задайте BSL_LANGUAGE_SERVER_JAR или положите " + DEFAULT_JAR + " в текущую директорию.";
+                    + ". Задайте BSL_LANGUAGE_SERVER_JAR или положите " + JAR_NAME + " в каталог bsl-language-server/ проекта или в текущую директорию.";
         }
 
         Path src = Paths.get(srcDir).toAbsolutePath();
@@ -95,7 +118,8 @@ public final class BslRunner {
      */
     public String format(String src) {
         if (!isJarAvailable()) {
-            return "Ошибка: JAR BSL Language Server не найден: " + jarPath;
+            return "Ошибка: JAR BSL Language Server не найден: " + jarPath
+                    + ". Положите JAR в bsl-language-server/ или задайте BSL_LANGUAGE_SERVER_JAR.";
         }
 
         Path path = Paths.get(src).toAbsolutePath();

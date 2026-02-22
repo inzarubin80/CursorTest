@@ -8,7 +8,12 @@ MCP-сервер для анализа и форматирования кода 
 
 - **Java 17+**
 - JAR [BSL Language Server](https://github.com/1c-syntax/bsl-language-server/releases)
-- Переменная окружения **`BSL_LANGUAGE_SERVER_JAR`** (или файл `bsl-language-server.jar` в текущей директории)
+
+**Где положить JAR (по приоритету):**
+
+1. Переменная окружения **`BSL_LANGUAGE_SERVER_JAR`** — путь к JAR
+2. Каталог **`bsl-language-server/`** в проекте — положите туда файл `bsl-language-server.jar` (см. [bsl-language-server/README.md](bsl-language-server/README.md)); тогда сборка и запуск из корня или из `java/` работают без настройки
+3. Файл `bsl-language-server.jar` в текущей директории при запуске
 
 ## Сборка и запуск
 

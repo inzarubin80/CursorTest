@@ -53,8 +53,11 @@ target/mcp-1c-bsl-0.1.0-all.jar
 
 ## Настройка
 
-Переменная окружения **`BSL_LANGUAGE_SERVER_JAR`** — путь к JAR BSL Language Server.  
-Если не задана, используется `bsl-language-server.jar` в текущей директории.
+JAR BSL Language Server ищется в таком порядке:
+
+1. **`BSL_LANGUAGE_SERVER_JAR`** — путь к JAR (переменная окружения)
+2. **`bsl-language-server/bsl-language-server.jar`** в проекте — положите скачанный JAR в каталог [../bsl-language-server/](../bsl-language-server/) и переименуйте в `bsl-language-server.jar`; тогда при запуске из `java/` или из корня проекта JAR будет найден автоматически
+3. **`bsl-language-server.jar`** в текущей директории
 
 Пример (Windows):
 
