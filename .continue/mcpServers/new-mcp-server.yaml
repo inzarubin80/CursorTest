@@ -1,0 +1,8 @@
+name: MCP 1C Standards
+version: 0.0.1
+schema: v1
+mcpServers:
+  - name: MCP 1C Standards
+    command: /Users/izarubin/CursorTest/mcp-1c-standards/mcp-1c-standards
+    args: []
+    env: {}
