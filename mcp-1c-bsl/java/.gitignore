@@ -1,2 +1,5 @@
+# Сборка Maven (артефакты не коммитим)
+target/
+
 # BSL Language Server JAR (скачивается отдельно, ~110 MB)
 bsl-language-server.jar
