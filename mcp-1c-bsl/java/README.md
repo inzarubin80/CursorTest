@@ -55,9 +55,10 @@ target/mcp-1c-bsl-0.1.0-all.jar
 
 JAR BSL Language Server ищется в таком порядке:
 
-1. **`BSL_LANGUAGE_SERVER_JAR`** — путь к JAR (переменная окружения)
-2. **`bsl-language-server/bsl-language-server.jar`** в проекте — положите скачанный JAR в каталог [../bsl-language-server/](../bsl-language-server/) и переименуйте в `bsl-language-server.jar`; тогда при запуске из `java/` или из корня проекта JAR будет найден автоматически
-3. **`bsl-language-server.jar`** в текущей директории
+1. **Аргумент запуска `--bsl-language-server-jar <path>`** — путь к JAR (удобно задать в конфиге MCP)
+2. **`BSL_LANGUAGE_SERVER_JAR`** — путь к JAR (переменная окружения)
+3. **`bsl-language-server/bsl-language-server.jar`** в проекте — положите скачанный JAR в каталог [../bsl-language-server/](../bsl-language-server/) и переименуйте в `bsl-language-server.jar`; тогда при запуске из `java/` или из корня проекта JAR будет найден автоматически
+4. **`bsl-language-server.jar`** в текущей директории
 
 Пример (Windows):
 
@@ -87,21 +88,23 @@ export BSL_LANGUAGE_SERVER_JAR=/opt/bsl/bsl-language-server.jar
 
 Или для общего сервера: `"url": "http://mcp.company.local:8080/mcp"`.
 
-**Вариант 2 — локальный процесс (stdio):** запуск JAR на машине разработчика:
+**Вариант 2 — локальный процесс (stdio):** запуск JAR на машине разработчика. Путь к BSL LS можно задать аргументом или переменной окружения:
 
 ```json
 {
   "mcpServers": {
     "1c-bsl": {
       "command": "java",
-      "args": ["-jar", "/absolute/path/to/mcp-1c-bsl-0.1.0-all.jar"],
-      "env": {
-        "BSL_LANGUAGE_SERVER_JAR": "/path/to/bsl-language-server.jar"
-      }
+      "args": [
+        "-jar", "/absolute/path/to/mcp-1c-bsl-0.1.0-all.jar",
+        "--bsl-language-server-jar", "/absolute/path/to/bsl-language-server/bsl-language-server.jar"
+      ]
     }
   }
 }
 ```
+
+Или через переменную окружения: `"env": { "BSL_LANGUAGE_SERVER_JAR": "/path/to/bsl-language-server.jar" }`.
 
 ## Инструменты
 

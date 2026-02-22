@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -26,7 +27,16 @@ public final class BslRunner {
     private final ObjectMapper json = new ObjectMapper();
 
     public BslRunner() {
-        this.jarPath = resolveJarPath();
+        this(null);
+    }
+
+    /**
+     * @param explicitJarPath путь к JAR BSL Language Server (из аргумента MCP или env); null = авто-поиск
+     */
+    public BslRunner(String explicitJarPath) {
+        this.jarPath = explicitJarPath != null && !explicitJarPath.isBlank()
+                ? explicitJarPath
+                : resolveJarPath();
     }
 
     /**

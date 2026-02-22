@@ -29,8 +29,9 @@ public final class Mcp1cBslServer {
 
     public static void main(String[] args) throws Exception {
         int httpPort = parseHttpPort(args);
+        String bslJarPath = parseBslLanguageServerJar(args);
         McpJsonMapper jsonMapper = getJsonMapper();
-        BslRunner bsl = new BslRunner();
+        BslRunner bsl = new BslRunner(bslJarPath);
 
         if (httpPort > 0) {
             runHttpMode(jsonMapper, bsl, httpPort);
@@ -63,6 +64,16 @@ public final class Mcp1cBslServer {
             }
         }
         return 0;
+    }
+
+    /** Путь к JAR BSL Language Server из аргумента --bsl-language-server-jar <path>. */
+    private static String parseBslLanguageServerJar(String[] args) {
+        for (int i = 0; i < args.length; i++) {
+            if ("--bsl-language-server-jar".equals(args[i]) && i + 1 < args.length) {
+                return args[i + 1];
+            }
+        }
+        return null;
     }
 
     private static McpJsonMapper getJsonMapper() {
