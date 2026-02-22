@@ -27,16 +27,22 @@ public final class Mcp1cBslServer {
     private static final String MCP_ENDPOINT = "/mcp";
     private static final int DEFAULT_HTTP_PORT = 8080;
 
-    public static void main(String[] args) throws Exception {
-        int httpPort = parseHttpPort(args);
-        String bslJarPath = parseBslLanguageServerJar(args);
-        McpJsonMapper jsonMapper = getJsonMapper();
-        BslRunner bsl = new BslRunner(bslJarPath);
+    public static void main(String[] args) {
+        try {
+            int httpPort = parseHttpPort(args);
+            String bslJarPath = parseBslLanguageServerJar(args);
+            McpJsonMapper jsonMapper = getJsonMapper();
+            BslRunner bsl = new BslRunner(bslJarPath);
 
-        if (httpPort > 0) {
-            runHttpMode(jsonMapper, bsl, httpPort);
-        } else {
-            runStdioMode(jsonMapper, bsl);
+            if (httpPort > 0) {
+                runHttpMode(jsonMapper, bsl, httpPort);
+            } else {
+                runStdioMode(jsonMapper, bsl);
+            }
+        } catch (Throwable t) {
+            System.err.println("MCP 1C BSL failed to start: " + t.getMessage());
+            t.printStackTrace(System.err);
+            System.exit(1);
         }
     }
 

@@ -6,6 +6,8 @@ mcpServers:
     command: /Users/izarubin/CursorTest/mcp-1c-standards/mcp-1c-standards
     args: []
     env: {}
+  # MCP 1C BSL: если "Connection closed", укажите полный путь к java (в GUI PATH часто пустой), например:
+  # command: /opt/homebrew/opt/openjdk@17/bin/java  или  /usr/lib/jvm/java-17-openjdk/bin/java
   - name: MCP 1C BSL
     command: java
     args:
