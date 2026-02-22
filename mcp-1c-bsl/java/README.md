@@ -110,4 +110,5 @@ export BSL_LANGUAGE_SERVER_JAR=/opt/bsl/bsl-language-server.jar
 | **bsl_analyze** | Анализ каталога или файла: диагностики (синтаксис, правила) и метрики. Тот же движок, что в SonarQube BSL Plugin. |
 | **bsl_format**  | Форматирование файла или каталога по правилам BSL LS. |
 
-Архитектура и связка с SonarQube описаны в [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+Архитектура и связка с SonarQube описаны в [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).  
+**Подробная инструкция для macOS:** [../docs/MACOS.md](../docs/MACOS.md).

@@ -27,6 +27,8 @@ java -jar target/mcp-1c-bsl-0.1.0-all.jar
 
 Подробнее: [java/README.md](java/README.md).
 
+**Подробная инструкция для macOS:** [docs/MACOS.md](docs/MACOS.md) — установка Java 17, сборка, размещение JAR, настройка Cursor и типичные проблемы.
+
 ## Инструменты (Tools)
 
 | Инструмент     | Описание |
