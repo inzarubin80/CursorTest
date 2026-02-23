@@ -10,3 +10,10 @@ mcpServers:
       - --bsl-language-server-jar
       - /Users/izarubin/CursorTest/mcp-1c-bsl/bsl-language-server/bsl-language-server-0.28.5-exec.jar
     env: {}
+  - name: MCP 1C Structure
+    command: java
+    args:
+      - -jar
+      - /home/ser/CursorTest/mcp-1c-structure/java/target/mcp-1c-structure-0.1.0-all.jar
+    env:
+      MCP_1C_STRUCTURE_ZIP_PATH: /home/ser/CursorTest/mcp-1c-structure/ОписаниеКонфигурации_Тест.zip
