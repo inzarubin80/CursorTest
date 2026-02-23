@@ -15,11 +15,13 @@ import org.eclipse.jetty.server.ServerConnector;
 import ru.mcp.structure.snapshot.Meta;
 import ru.mcp.structure.snapshot.RagZipLoader;
 import ru.mcp.structure.snapshot.SnapshotLoader;
+import ru.mcp.structure.snapshot.StructureXmlLoader;
 import ru.mcp.structure.snapshot.StructureObject;
 import ru.mcp.structure.store.InMemoryStore;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
@@ -40,13 +42,14 @@ public final class Mcp1cStructureServer {
         try {
             int httpPort = parseHttpPort(args);
             String zipPath = parseZipPath(args);
+            String xmlPath = parseXmlPath(args);
             McpJsonMapper jsonMapper = getJsonMapper();
             InMemoryStore store = new InMemoryStore();
 
             if (httpPort > 0) {
-                runHttpMode(jsonMapper, store, zipPath, httpPort);
+                runHttpMode(jsonMapper, store, zipPath, xmlPath, httpPort);
             } else {
-                runStdioMode(jsonMapper, store, zipPath);
+                runStdioMode(jsonMapper, store, zipPath, xmlPath);
             }
         } catch (Throwable t) {
             System.err.println("MCP 1C Structure failed to start: " + t.getMessage());
@@ -90,27 +93,46 @@ public final class Mcp1cStructureServer {
         return env != null && !env.isBlank() ? env.trim() : null;
     }
 
+    private static String parseXmlPath(String[] args) {
+        for (int i = 0; i < args.length; i++) {
+            if ("--xml-path".equals(args[i]) && i + 1 < args.length) {
+                return args[i + 1];
+            }
+        }
+        String env = System.getenv("MCP_1C_STRUCTURE_XML_PATH");
+        return env != null && !env.isBlank() ? env.trim() : null;
+    }
+
     private static McpJsonMapper getJsonMapper() {
         return ServiceLoader.load(McpJsonMapperSupplier.class).findFirst()
                 .orElseThrow(() -> new IllegalStateException("No McpJsonMapperSupplier found"))
                 .get();
     }
 
-    /** Ленивая загрузка: если задан путь к ZIP и store пуст — загружаем RAG-ZIP. */
-    private static String ensureLoaded(InMemoryStore store, String zipPath) {
+    /** Ленивая загрузка: если задан путь к ZIP или XML и store пуст — загружаем (ZIP приоритетнее). */
+    private static String ensureLoaded(InMemoryStore store, String zipPath, String xmlPath) {
         if (store.isLoaded()) {
             return null;
         }
-        if (zipPath == null || zipPath.isBlank()) {
-            return "Данные не загружены. Задайте MCP_1C_STRUCTURE_ZIP_PATH (путь к ZIP-архиву с objects.csv и markdown) или вызовите structure_load_rag_zip.";
+        if (zipPath != null && !zipPath.isBlank()) {
+            try {
+                SnapshotLoader.Snapshot snapshot = RagZipLoader.load(Path.of(zipPath));
+                store.load(snapshot);
+                return null;
+            } catch (Exception e) {
+                return "Ошибка загрузки ZIP: " + e.getMessage();
+            }
         }
-        try {
-            SnapshotLoader.Snapshot snapshot = RagZipLoader.load(Path.of(zipPath));
-            store.load(snapshot);
-            return null;
-        } catch (Exception e) {
-            return "Ошибка загрузки ZIP: " + e.getMessage();
+        if (xmlPath != null && !xmlPath.isBlank()) {
+            try {
+                SnapshotLoader.Snapshot snapshot = StructureXmlLoader.load(Path.of(xmlPath));
+                store.load(snapshot);
+                return null;
+            } catch (Exception e) {
+                return "Ошибка загрузки XML: " + e.getMessage();
+            }
         }
+        return "Данные не загружены. Задайте MCP_1C_STRUCTURE_ZIP_PATH или MCP_1C_STRUCTURE_XML_PATH (или вызовите structure_load_rag_zip / structure_load_structure_xml).";
     }
 
     private static McpSchema.CallToolResult jsonResult(Map<String, ?> data) {
@@ -134,13 +156,13 @@ public final class Mcp1cStructureServer {
                 .build();
     }
 
-    private static void runHttpMode(McpJsonMapper jsonMapper, InMemoryStore store, String zipPath, int port) throws Exception {
+    private static void runHttpMode(McpJsonMapper jsonMapper, InMemoryStore store, String zipPath, String xmlPath, int port) throws Exception {
         HttpServletStreamableServerTransportProvider httpTransport = HttpServletStreamableServerTransportProvider.builder()
                 .jsonMapper(jsonMapper)
                 .mcpEndpoint(MCP_ENDPOINT)
                 .build();
 
-        McpSyncServer server = buildServerHttp(store, zipPath, httpTransport);
+        McpSyncServer server = buildServerHttp(store, zipPath, xmlPath, httpTransport);
 
         Server jetty = new Server();
         ServerConnector connector = new ServerConnector(jetty);
@@ -164,9 +186,9 @@ public final class Mcp1cStructureServer {
         jetty.join();
     }
 
-    private static void runStdioMode(McpJsonMapper jsonMapper, InMemoryStore store, String zipPath) throws InterruptedException {
+    private static void runStdioMode(McpJsonMapper jsonMapper, InMemoryStore store, String zipPath, String xmlPath) throws InterruptedException {
         StdioServerTransportProvider transport = new StdioServerTransportProvider(jsonMapper);
-        McpSyncServer server = buildServerStdio(store, zipPath, transport);
+        McpSyncServer server = buildServerStdio(store, zipPath, xmlPath, transport);
         try {
             Thread.currentThread().join();
         } catch (InterruptedException e) {
@@ -175,7 +197,7 @@ public final class Mcp1cStructureServer {
         }
     }
 
-    private static McpSyncServer buildServerStdio(InMemoryStore store, String zipPath, StdioServerTransportProvider transport) {
+    private static McpSyncServer buildServerStdio(InMemoryStore store, String zipPath, String xmlPath, StdioServerTransportProvider transport) {
         return McpServer.sync(transport).serverInfo(NAME, VERSION)
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
                 .tool(
@@ -191,7 +213,7 @@ public final class Mcp1cStructureServer {
                                 ), List.of("query"), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath);
+                            String err = ensureLoaded(store, zipPath, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -208,12 +230,15 @@ public final class Mcp1cStructureServer {
                             InMemoryStore.SearchResult result = store.search(query, type, limit, offset);
                             List<Map<String, String>> matches = new ArrayList<>();
                             for (StructureObject o : result.getMatches()) {
-                                matches.add(Map.of(
-                                        "id", o.getId() != null ? o.getId() : "",
-                                        "type", o.getType() != null ? o.getType() : "",
-                                        "name", o.getName() != null ? o.getName() : "",
-                                        "synonym", o.getSynonym() != null ? o.getSynonym() : ""
-                                ));
+                                Map<String, String> m = new LinkedHashMap<>();
+                                m.put("id", o.getId() != null ? o.getId() : "");
+                                m.put("type", o.getType() != null ? o.getType() : "");
+                                m.put("name", o.getName() != null ? o.getName() : "");
+                                m.put("synonym", o.getSynonym() != null ? o.getSynonym() : "");
+                                if ("Constant".equals(o.getType()) && o.getValueType() != null && !o.getValueType().isEmpty()) {
+                                    m.put("valueType", o.getValueType());
+                                }
+                                matches.add(m);
                             }
                             return jsonResult(Map.of(
                                     "summary", "Найдено " + result.getTotal() + " объектов.",
@@ -232,7 +257,7 @@ public final class Mcp1cStructureServer {
                                 ), List.of("objectId"), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath);
+                            String err = ensureLoaded(store, zipPath, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -255,13 +280,49 @@ public final class Mcp1cStructureServer {
                 )
                 .tool(
                         McpSchema.Tool.builder()
+                                .name("structure_get_type_usages")
+                                .title("Где используется тип")
+                                .description("Список использований объекта как типа (реквизиты, ТЧ, константы). Параметр: objectId (например cat.Номенклатура). Заполняется только при загрузке из XML.")
+                                .inputSchema(new McpSchema.JsonSchema("object", Map.of(
+                                        "objectId", Map.of("type", "string", "description", "Идентификатор объекта-типа (например cat.Валюты)")
+                                ), List.of("objectId"), null, null, null))
+                                .build(),
+                        (exchange, arguments) -> {
+                            String err = ensureLoaded(store, zipPath, xmlPath);
+                            if (err != null && !store.isLoaded()) {
+                                return errResult(err);
+                            }
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> args = arguments instanceof Map ? (Map<String, Object>) arguments : Map.of();
+                            String objectId = args.get("objectId") != null ? args.get("objectId").toString().trim() : "";
+                            if (objectId.isEmpty()) {
+                                return errResult("objectId обязателен");
+                            }
+                            StructureObject obj = store.getObject(objectId);
+                            if (obj == null) {
+                                return errResult("Объект не найден: " + objectId);
+                            }
+                            List<ru.mcp.structure.snapshot.TypeUsage> usedIn = obj.getUsedIn();
+                            if (usedIn == null) {
+                                usedIn = List.of();
+                            }
+                            return jsonResult(Map.of(
+                                    "summary", "Использований типа «" + obj.getName() + "»: " + usedIn.size() + ".",
+                                    "objectId", objectId,
+                                    "objectName", obj.getName() != null ? obj.getName() : "",
+                                    "usedIn", usedIn
+                            ));
+                        }
+                )
+                .tool(
+                        McpSchema.Tool.builder()
                                 .name("structure_list_types")
                                 .title("Типы метаданных")
                                 .description("Список типов метаданных в снимке и количество объектов по каждому типу.")
                                 .inputSchema(new McpSchema.JsonSchema("object", Map.of(), List.of(), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath);
+                            String err = ensureLoaded(store, zipPath, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -308,10 +369,46 @@ public final class Mcp1cStructureServer {
                             }
                         }
                 )
+                .tool(
+                        McpSchema.Tool.builder()
+                                .name("structure_load_structure_xml")
+                                .title("Загрузить снимок из СтруктураБазыДанных.xml")
+                                .description("Загрузить снимок структуры из XML «Структура базы данных» (реквизиты и табличные части). Параметр: xmlPath.")
+                                .inputSchema(new McpSchema.JsonSchema("object", Map.of(
+                                        "xmlPath", Map.of("type", "string", "description", "Путь к файлу СтруктураБазыДанных.xml")
+                                ), List.of("xmlPath"), null, null, null))
+                                .build(),
+                        (exchange, arguments) -> {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> args = arguments instanceof Map ? (Map<String, Object>) arguments : Map.of();
+                            String pathToXml = args.get("xmlPath") != null ? args.get("xmlPath").toString().trim() : "";
+                            if (pathToXml.isEmpty()) {
+                                return errResult("xmlPath обязателен — путь к файлу СтруктураБазыДанных.xml");
+                            }
+                            try {
+                                SnapshotLoader.Snapshot snapshot = StructureXmlLoader.load(Path.of(pathToXml));
+                                store.load(snapshot);
+                                Meta meta = snapshot.getMeta();
+                                String summary = String.format("Снимок из XML загружен: объектов %d (реквизиты и табличные части).",
+                                        snapshot.getObjects().size());
+                                return jsonResult(Map.of(
+                                        "summary", summary,
+                                        "objectCount", snapshot.getObjects().size(),
+                                        "configName", meta.getConfigName() != null ? meta.getConfigName() : "",
+                                        "source", meta.getSource() != null ? meta.getSource() : "structure-xml"
+                                ));
+                            } catch (Exception e) {
+                                String msg = e.getMessage();
+                                if (msg == null && e.getCause() != null) msg = e.getCause().getMessage();
+                                if (msg == null) msg = e.getClass().getSimpleName();
+                                return errResult("Загрузка XML: " + msg);
+                            }
+                        }
+                )
                 .build();
     }
 
-    private static McpSyncServer buildServerHttp(InMemoryStore store, String zipPath, HttpServletStreamableServerTransportProvider httpTransport) {
+    private static McpSyncServer buildServerHttp(InMemoryStore store, String zipPath, String xmlPath, HttpServletStreamableServerTransportProvider httpTransport) {
         return McpServer.sync(httpTransport).serverInfo(NAME, VERSION)
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
                 .tool(
@@ -327,7 +424,7 @@ public final class Mcp1cStructureServer {
                                 ), List.of("query"), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath);
+                            String err = ensureLoaded(store, zipPath, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -344,12 +441,15 @@ public final class Mcp1cStructureServer {
                             InMemoryStore.SearchResult result = store.search(query, type, limit, offset);
                             List<Map<String, String>> matches = new ArrayList<>();
                             for (StructureObject o : result.getMatches()) {
-                                matches.add(Map.of(
-                                        "id", o.getId() != null ? o.getId() : "",
-                                        "type", o.getType() != null ? o.getType() : "",
-                                        "name", o.getName() != null ? o.getName() : "",
-                                        "synonym", o.getSynonym() != null ? o.getSynonym() : ""
-                                ));
+                                Map<String, String> m = new LinkedHashMap<>();
+                                m.put("id", o.getId() != null ? o.getId() : "");
+                                m.put("type", o.getType() != null ? o.getType() : "");
+                                m.put("name", o.getName() != null ? o.getName() : "");
+                                m.put("synonym", o.getSynonym() != null ? o.getSynonym() : "");
+                                if ("Constant".equals(o.getType()) && o.getValueType() != null && !o.getValueType().isEmpty()) {
+                                    m.put("valueType", o.getValueType());
+                                }
+                                matches.add(m);
                             }
                             return jsonResult(Map.of(
                                     "summary", "Найдено " + result.getTotal() + " объектов.",
@@ -368,7 +468,7 @@ public final class Mcp1cStructureServer {
                                 ), List.of("objectId"), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath);
+                            String err = ensureLoaded(store, zipPath, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -391,13 +491,49 @@ public final class Mcp1cStructureServer {
                 )
                 .tool(
                         McpSchema.Tool.builder()
+                                .name("structure_get_type_usages")
+                                .title("Где используется тип")
+                                .description("Список использований объекта как типа (реквизиты, ТЧ, константы). Параметр: objectId (например cat.Номенклатура). Заполняется только при загрузке из XML.")
+                                .inputSchema(new McpSchema.JsonSchema("object", Map.of(
+                                        "objectId", Map.of("type", "string", "description", "Идентификатор объекта-типа (например cat.Валюты)")
+                                ), List.of("objectId"), null, null, null))
+                                .build(),
+                        (exchange, arguments) -> {
+                            String err = ensureLoaded(store, zipPath, xmlPath);
+                            if (err != null && !store.isLoaded()) {
+                                return errResult(err);
+                            }
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> args = arguments instanceof Map ? (Map<String, Object>) arguments : Map.of();
+                            String objectId = args.get("objectId") != null ? args.get("objectId").toString().trim() : "";
+                            if (objectId.isEmpty()) {
+                                return errResult("objectId обязателен");
+                            }
+                            StructureObject obj = store.getObject(objectId);
+                            if (obj == null) {
+                                return errResult("Объект не найден: " + objectId);
+                            }
+                            List<ru.mcp.structure.snapshot.TypeUsage> usedIn = obj.getUsedIn();
+                            if (usedIn == null) {
+                                usedIn = List.of();
+                            }
+                            return jsonResult(Map.of(
+                                    "summary", "Использований типа «" + obj.getName() + "»: " + usedIn.size() + ".",
+                                    "objectId", objectId,
+                                    "objectName", obj.getName() != null ? obj.getName() : "",
+                                    "usedIn", usedIn
+                            ));
+                        }
+                )
+                .tool(
+                        McpSchema.Tool.builder()
                                 .name("structure_list_types")
                                 .title("Типы метаданных")
                                 .description("Список типов метаданных в снимке и количество объектов по каждому типу.")
                                 .inputSchema(new McpSchema.JsonSchema("object", Map.of(), List.of(), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath);
+                            String err = ensureLoaded(store, zipPath, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -441,6 +577,42 @@ public final class Mcp1cStructureServer {
                                 ));
                             } catch (Exception e) {
                                 return errResult("Загрузка RAG-ZIP: " + e.getMessage());
+                            }
+                        }
+                )
+                .tool(
+                        McpSchema.Tool.builder()
+                                .name("structure_load_structure_xml")
+                                .title("Загрузить снимок из СтруктураБазыДанных.xml")
+                                .description("Загрузить снимок структуры из XML «Структура базы данных» (реквизиты и табличные части). Параметр: xmlPath.")
+                                .inputSchema(new McpSchema.JsonSchema("object", Map.of(
+                                        "xmlPath", Map.of("type", "string", "description", "Путь к файлу СтруктураБазыДанных.xml")
+                                ), List.of("xmlPath"), null, null, null))
+                                .build(),
+                        (exchange, arguments) -> {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> args = arguments instanceof Map ? (Map<String, Object>) arguments : Map.of();
+                            String pathToXml = args.get("xmlPath") != null ? args.get("xmlPath").toString().trim() : "";
+                            if (pathToXml.isEmpty()) {
+                                return errResult("xmlPath обязателен — путь к файлу СтруктураБазыДанных.xml");
+                            }
+                            try {
+                                SnapshotLoader.Snapshot snapshot = StructureXmlLoader.load(Path.of(pathToXml));
+                                store.load(snapshot);
+                                Meta meta = snapshot.getMeta();
+                                String summary = String.format("Снимок из XML загружен: объектов %d (реквизиты и табличные части).",
+                                        snapshot.getObjects().size());
+                                return jsonResult(Map.of(
+                                        "summary", summary,
+                                        "objectCount", snapshot.getObjects().size(),
+                                        "configName", meta.getConfigName() != null ? meta.getConfigName() : "",
+                                        "source", meta.getSource() != null ? meta.getSource() : "structure-xml"
+                                ));
+                            } catch (Exception e) {
+                                String msg = e.getMessage();
+                                if (msg == null && e.getCause() != null) msg = e.getCause().getMessage();
+                                if (msg == null) msg = e.getClass().getSimpleName();
+                                return errResult("Загрузка XML: " + msg);
                             }
                         }
                 )

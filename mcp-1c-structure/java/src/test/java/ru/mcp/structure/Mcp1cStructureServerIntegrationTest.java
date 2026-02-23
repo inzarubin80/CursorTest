@@ -28,8 +28,10 @@ class Mcp1cStructureServerIntegrationTest {
     private static final Set<String> EXPECTED_TOOLS = Set.of(
             "structure_search",
             "structure_get_object",
+            "structure_get_type_usages",
             "structure_list_types",
-            "structure_load_rag_zip"
+            "structure_load_rag_zip",
+            "structure_load_structure_xml"
     );
 
     private static int findFreePort() {
@@ -109,13 +111,13 @@ class Mcp1cStructureServerIntegrationTest {
 
     // --- Уровень протокола: наличие инструментов ---
     @Test
-    void serverExposesFourStructureTools() throws Exception {
+    void serverExposesStructureTools() throws Exception {
         withServer(client -> {
             McpSchema.ListToolsResult list = client.listTools();
             assertNotNull(list);
             assertNotNull(list.tools());
             Set<String> names = list.tools().stream().map(McpSchema.Tool::name).collect(Collectors.toSet());
-            assertEquals(EXPECTED_TOOLS, names, "Ожидаются ровно 4 инструмента: " + names);
+            assertEquals(EXPECTED_TOOLS, names, "Ожидаются инструменты: " + names);
         });
     }
 
@@ -169,6 +171,139 @@ class Mcp1cStructureServerIntegrationTest {
                     new McpSchema.CallToolRequest("structure_load_rag_zip", Map.of("zipPath", "/nonexistent/rag.zip")));
             assertTrue(result.isError());
             assertTrue(getTextContent(result).contains("Ошибка") || getTextContent(result).contains("Загрузка"));
+        });
+    }
+
+    @Test
+    void structure_load_structure_xml_noXmlPath_returnsError() throws Exception {
+        withServer(client -> {
+            McpSchema.CallToolResult result = client.callTool(
+                    new McpSchema.CallToolRequest("structure_load_structure_xml", Map.of()));
+            assertTrue(result.isError());
+            assertTrue(getTextContent(result).toLowerCase().contains("xmlpath") || getTextContent(result).contains("обязателен"));
+        });
+    }
+
+    @Test
+    void structure_load_structure_xml_nonexistentPath_returnsError() throws Exception {
+        withServer(client -> {
+            McpSchema.CallToolResult result = client.callTool(
+                    new McpSchema.CallToolRequest("structure_load_structure_xml", Map.of("xmlPath", "/nonexistent/structure.xml")));
+            assertTrue(result.isError());
+            assertTrue(getTextContent(result).contains("Ошибка") || getTextContent(result).contains("Загрузка") || getTextContent(result).contains("Not a file"));
+        });
+    }
+
+    /** Загружает снимок из СтруктураБазыДанных.xml (если файл есть) и проверяет, что у документа ВзаимодействиеССайтом есть props и tabularSections. */
+    @Test
+    void structure_load_structure_xml_thenGetObject_returnsPropsAndTabularSections() throws Exception {
+        Path xmlPath = Path.of("..", "СтруктураБазыДанных.xml").toAbsolutePath().normalize();
+        if (!Files.isRegularFile(xmlPath)) {
+            // В CI или без выгрузки XML файла тест пропускаем
+            return;
+        }
+        withServer(client -> {
+            McpSchema.CallToolResult loadResult = client.callTool(
+                    new McpSchema.CallToolRequest("structure_load_structure_xml", Map.of("xmlPath", xmlPath.toString())));
+            assertFalse(loadResult.isError(), getTextContent(loadResult));
+
+            McpSchema.CallToolResult getResult = client.callTool(
+                    new McpSchema.CallToolRequest("structure_get_object", Map.of("objectId", "doc.ВзаимодействиеССайтом")));
+            String getText = getTextContent(getResult);
+            assertFalse(getResult.isError(), getText);
+            assertTrue(getText.contains("ВзаимодействиеССайтом") || getText.contains("Document"), getText);
+            assertTrue(getText.contains("props") || getText.contains("tabularSections"),
+                    "Ожидаются реквизиты или табличные части в ответе: " + getText.substring(0, Math.min(500, getText.length())));
+        });
+    }
+
+    /** После загрузки XML константы (НаборКонстант) разворачиваются в объекты типа Constant; поиск с type=Constant возвращает результаты. */
+    @Test
+    void structure_load_structure_xml_thenSearchConstant_returnsConstants() throws Exception {
+        Path xmlPath = Path.of("..", "СтруктураБазыДанных.xml").toAbsolutePath().normalize();
+        if (!Files.isRegularFile(xmlPath)) {
+            return;
+        }
+        withServer(client -> {
+            McpSchema.CallToolResult loadResult = client.callTool(
+                    new McpSchema.CallToolRequest("structure_load_structure_xml", Map.of("xmlPath", xmlPath.toString())));
+            assertFalse(loadResult.isError(), getTextContent(loadResult));
+
+            McpSchema.CallToolResult searchResult = client.callTool(
+                    new McpSchema.CallToolRequest("structure_search", Map.of(
+                            "query", "константа",
+                            "type", "Constant",
+                            "limit", 50)));
+            String searchText = getTextContent(searchResult);
+            assertFalse(searchResult.isError(), searchText);
+            assertTrue(searchText.contains("\"total\":") && !searchText.contains("\"total\":0"),
+                    "Ожидается хотя бы один объект типа Constant: " + searchText);
+
+            McpSchema.CallToolResult typesResult = client.callTool(
+                    new McpSchema.CallToolRequest("structure_list_types", Map.of()));
+            String typesText = getTextContent(typesResult);
+            assertTrue(typesText.contains("Constant"), "В structure_list_types должен быть тип Constant: " + typesText);
+        });
+    }
+
+    /** Вызов MCP: загрузка XML и structure_get_object для doc.ЗаказПациента — вывод результата в stdout. */
+    @Test
+    void structure_load_xml_thenGetObject_ЗаказПациента_printResult() throws Exception {
+        Path xmlPath = Path.of("..", "СтруктураБазыДанных.xml").toAbsolutePath().normalize();
+        if (!Files.isRegularFile(xmlPath)) {
+            return;
+        }
+        withServer(client -> {
+            McpSchema.CallToolResult loadResult = client.callTool(
+                    new McpSchema.CallToolRequest("structure_load_structure_xml", Map.of("xmlPath", xmlPath.toString())));
+            if (loadResult.isError()) {
+                System.out.println("Load error: " + getTextContent(loadResult));
+                return;
+            }
+            McpSchema.CallToolResult getResult = client.callTool(
+                    new McpSchema.CallToolRequest("structure_get_object", Map.of("objectId", "doc.ЗаказПациента")));
+            System.out.println("--- MCP structure_get_object(doc.ЗаказПациента) ---");
+            System.out.println(getTextContent(getResult));
+        });
+    }
+
+    /** После загрузки XML у объекта-типа (справочник Валюты) в карточке есть поле usedIn. */
+    @Test
+    void structure_load_xml_thenGetObject_usedInPresent() throws Exception {
+        Path xmlPath = Path.of("..", "СтруктураБазыДанных.xml").toAbsolutePath().normalize();
+        if (!Files.isRegularFile(xmlPath)) {
+            return;
+        }
+        withServer(client -> {
+            McpSchema.CallToolResult loadResult = client.callTool(
+                    new McpSchema.CallToolRequest("structure_load_structure_xml", Map.of("xmlPath", xmlPath.toString())));
+            assertFalse(loadResult.isError(), getTextContent(loadResult));
+
+            McpSchema.CallToolResult getResult = client.callTool(
+                    new McpSchema.CallToolRequest("structure_get_object", Map.of("objectId", "cat.Валюты")));
+            String getText = getTextContent(getResult);
+            assertFalse(getResult.isError(), getText);
+            assertTrue(getText.contains("usedIn"), "В карточке справочника Валюты должно быть поле usedIn: " + getText.substring(0, Math.min(500, getText.length())));
+        });
+    }
+
+    /** structure_get_type_usages возвращает список использований типа (после загрузки XML). */
+    @Test
+    void structure_load_xml_thenGetTypeUsages() throws Exception {
+        Path xmlPath = Path.of("..", "СтруктураБазыДанных.xml").toAbsolutePath().normalize();
+        if (!Files.isRegularFile(xmlPath)) {
+            return;
+        }
+        withServer(client -> {
+            McpSchema.CallToolResult loadResult = client.callTool(
+                    new McpSchema.CallToolRequest("structure_load_structure_xml", Map.of("xmlPath", xmlPath.toString())));
+            assertFalse(loadResult.isError(), getTextContent(loadResult));
+
+            McpSchema.CallToolResult usagesResult = client.callTool(
+                    new McpSchema.CallToolRequest("structure_get_type_usages", Map.of("objectId", "cat.Валюты")));
+            String usagesText = getTextContent(usagesResult);
+            assertFalse(usagesResult.isError(), usagesText);
+            assertTrue(usagesText.contains("usedIn") || usagesText.contains("objectId"), "Ответ structure_get_type_usages должен содержать usedIn или objectId: " + usagesText.substring(0, Math.min(400, usagesText.length())));
         });
     }
 

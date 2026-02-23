@@ -22,6 +22,10 @@ public final class StructureObject {
     private String description;
     /** Полное текстовое описание объекта (markdown), например из выгрузки RAG-формата (ZIP с objects.csv + md). */
     private String content;
+    /** Тип значения константы (только для type=Constant), например «Строка», «Число», «Документ.Заказ». */
+    private String valueType;
+    /** Где этот объект используется как тип (реквизиты, измерения, ресурсы, ТЧ, константы). Заполняется при загрузке из XML. */
+    private List<TypeUsage> usedIn;
 
     /** Вектор для представления «имя + синоним» (TF-IDF), не сериализуется в API. */
     @JsonIgnore
@@ -103,6 +107,22 @@ public final class StructureObject {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public String getValueType() {
+        return valueType;
+    }
+
+    public void setValueType(String valueType) {
+        this.valueType = valueType;
+    }
+
+    public List<TypeUsage> getUsedIn() {
+        return usedIn;
+    }
+
+    public void setUsedIn(List<TypeUsage> usedIn) {
+        this.usedIn = usedIn;
     }
 
     public float[] getEmbeddingObjectName() {
