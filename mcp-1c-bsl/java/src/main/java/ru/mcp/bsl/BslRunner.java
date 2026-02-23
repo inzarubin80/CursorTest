@@ -162,7 +162,8 @@ public final class BslRunner {
         }
     }
 
-    private String formatReport(JsonNode root, Path reportPath) {
+    /** Форматирование JSON-отчёта BSL LS в текст. Доступен для тестов (package-private). */
+    String formatReport(JsonNode root, Path reportPath) {
         StringBuilder b = new StringBuilder();
         b.append("Анализ: ").append(root.path("sourceDir").asText("")).append("\n");
         b.append("Дата: ").append(root.path("date").asText("")).append("\n\n");

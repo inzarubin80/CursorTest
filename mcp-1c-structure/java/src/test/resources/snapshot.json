@@ -1,0 +1,76 @@
+{
+  "meta": {
+    "version": "1.0",
+    "configName": "Тестовая конфигурация",
+    "configVersion": "1.0.0",
+    "exportedAt": "2025-02-23T12:00:00Z",
+    "source": "integration-test",
+    "objectCount": 6,
+    "indexVersion": 1
+  },
+  "objects": [
+    {
+      "id": "doc.РеализацияТоваров",
+      "type": "Document",
+      "name": "РеализацияТоваров",
+      "synonym": "Реализация товаров",
+      "props": [
+        {"name": "Номер", "type": "Number", "synonym": "Номер"},
+        {"name": "Контрагент", "type": "CatalogRef.Контрагенты", "synonym": "Контрагент"}
+      ],
+      "tabularSections": [],
+      "movements": ["AccumulationRegister.ТоварыНаСкладах"],
+      "description": "Документ реализации"
+    },
+    {
+      "id": "cat.Контрагенты",
+      "type": "Catalog",
+      "name": "Контрагенты",
+      "synonym": "Контрагенты",
+      "props": [
+        {"name": "Наименование", "type": "String", "synonym": "Наименование"}
+      ],
+      "tabularSections": [],
+      "description": "Справочник контрагентов"
+    },
+    {
+      "id": "commonmodule.ОбщийМодуль",
+      "type": "CommonModule",
+      "name": "ОбщийМодуль",
+      "synonym": "Общий модуль",
+      "props": [],
+      "tabularSections": [],
+      "description": ""
+    },
+    {
+      "id": "InformationRegister.ЦеныТоваров",
+      "type": "InformationRegister",
+      "name": "ЦеныТоваров",
+      "synonym": "Цены товаров",
+      "props": [],
+      "tabularSections": [],
+      "description": "Регистр сведений"
+    },
+    {
+      "id": "AccumulationRegister.ТоварыНаСкладах",
+      "type": "AccumulationRegister",
+      "name": "ТоварыНаСкладах",
+      "synonym": "Товары на складах",
+      "props": [],
+      "tabularSections": [],
+      "description": "Регистр накоплений"
+    },
+    {
+      "id": "AccountingRegister.Хозрасчетный",
+      "type": "AccountingRegister",
+      "name": "Хозрасчетный",
+      "synonym": "Хозрасчетный",
+      "props": [],
+      "tabularSections": [],
+      "description": "Регистр бухгалтерии"
+    }
+  ],
+  "relations": [
+    {"from": "doc.РеализацияТоваров", "to": "cat.Контрагенты", "kind": "reference"}
+  ]
+}

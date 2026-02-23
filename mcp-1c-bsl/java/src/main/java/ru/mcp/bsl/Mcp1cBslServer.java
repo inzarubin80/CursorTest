@@ -46,8 +46,8 @@ public final class Mcp1cBslServer {
         }
     }
 
-    /** Порт из MCP_HTTP_PORT или из аргументов --http --port N. 0 = stdio. */
-    private static int parseHttpPort(String[] args) {
+    /** Порт из MCP_HTTP_PORT или из аргументов --http --port N. 0 = stdio. Доступен для тестов. */
+    static int parseHttpPort(String[] args) {
         String env = System.getenv("MCP_HTTP_PORT");
         if (env != null && !env.isBlank()) {
             try {
@@ -72,8 +72,8 @@ public final class Mcp1cBslServer {
         return 0;
     }
 
-    /** Путь к JAR BSL Language Server из аргумента --bsl-language-server-jar <path>. */
-    private static String parseBslLanguageServerJar(String[] args) {
+    /** Путь к JAR BSL Language Server из аргумента --bsl-language-server-jar <path>. Доступен для тестов. */
+    static String parseBslLanguageServerJar(String[] args) {
         for (int i = 0; i < args.length; i++) {
             if ("--bsl-language-server-jar".equals(args[i]) && i + 1 < args.length) {
                 return args[i + 1];

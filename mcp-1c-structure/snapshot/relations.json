@@ -1,4 +1,0 @@
-[
-  {"from": "doc.РеализацияТоваров", "to": "cat.Контрагенты", "kind": "reference"},
-  {"from": "doc.РеализацияТоваров", "to": "CommonModule.ОбщийМодульКлиент", "kind": "call"}
-]

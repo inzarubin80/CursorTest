@@ -1,113 +1,150 @@
-# MCP 1C Structure
+# MCP 1C Structure (Java)
 
-MCP-сервер для доступа к структуре конфигурации 1С: поиск объектов, карточка объекта, связи (references). Данные хранятся в PostgreSQL; снимок загружается в БД отдельной ручкой (MCP-инструмент или CLI indexer).
-
-## Документация
-
-Подробная документация в каталоге [docs/](docs/):
-
-- [Архитектура](docs/architecture.md) — MCP, Postgres, ручки загрузки, потоки данных
-- [Формат снимка](docs/snapshot-format.md) — meta.json, objects.json, relations.json, целостность
-- [API инструментов](docs/api-tools.md) — параметры и ответы всех MCP-инструментов, лимиты
-- [Indexer](docs/indexer.md) — CLI и HTTP-режим, POST /import, переменные окружения
+MCP-сервер для доступа к структуре конфигурации 1С: поиск объектов (векторный по TF-IDF + RRF и по тексту), карточка объекта с полным markdown. Реализация на **Java** без внешних БД и без внешнего API эмбеддингов: данные загружаются из **ZIP-архива** (формат RAG: objects.csv + markdown), при загрузке строятся **TF-IDF векторы** (два на объект: имя+синоним и тип+синоним/контент), поиск — косинусная близость + **RRF**.
 
 ## Требования
 
-- Go 1.23+
-- PostgreSQL (обязателен для запуска MCP)
+- **Java 17+**
+- **ZIP-архив** выгрузки структуры 1С: внутри файл `objects.csv` (колонки: Имя объекта;Тип объекта;Синоним;Файл) и markdown-файлы с описаниями (как из [mcp-1c-v1](https://github.com/FSerg/mcp-1c-v1) / обработки **ПолучитьТекстСтруктурыКонфигурацииФайлами.epf**).
 
 ## Сборка
 
 ```bash
-go build -o mcp-1c-structure ./cmd/mcp-1c-structure/
-go build -o indexer ./cmd/indexer/
+cd java
+./mvnw clean package
+# или: mvn clean package
 ```
 
-## Запуск MCP
+Исполняемый JAR: `java/target/mcp-1c-structure-0.1.0-all.jar`
 
-Сервер работает в режиме stdio. Для работы **обязательно** задать URL подключения к PostgreSQL.
+## Запуск
+
+**Режим stdio (по умолчанию):**
 
 ```bash
-export MCP_1C_STRUCTURE_DATABASE_URL="postgres://user:pass@localhost:5432/dbname"
-./mcp-1c-structure
+java -jar java/target/mcp-1c-structure-0.1.0-all.jar
 ```
 
-Без `MCP_1C_STRUCTURE_DATABASE_URL` (или `POSTGRES_DSN`) сервер завершится с ошибкой.
-
-### Переменные окружения
-
-| Переменная | Описание |
-|------------|----------|
-| `MCP_1C_STRUCTURE_DATABASE_URL` | URL подключения к PostgreSQL (или `POSTGRES_DSN`). **Обязателен** для запуска MCP. |
-| `MCP_1C_STRUCTURE_SNAPSHOT_DIR` | Путь по умолчанию к каталогу снимка для инструмента `structure_import_snapshot`, если аргумент `snapshotDir` не передан. |
-
-## Загрузка снимка в БД
-
-Данные в БД появляются **только** после загрузки снимка одной из двух ручек:
-
-1. **MCP-инструмент structure_import_snapshot** — передать путь к каталогу с meta.json, objects.json, relations.json (аргумент `snapshotDir` или каталог из `MCP_1C_STRUCTURE_SNAPSHOT_DIR`).
-2. **CLI indexer** — для CI или терминала:
+Указать путь к архиву (загрузка при первом обращении к данным):
 
 ```bash
-export MCP_1C_STRUCTURE_DATABASE_URL="postgres://..."
-./indexer -snapshot ./snapshot
+export MCP_1C_STRUCTURE_ZIP_PATH=/path/to/ОписаниеКонфигурации_Тест.zip
+java -jar java/target/mcp-1c-structure-0.1.0-all.jar
+# или:
+java -jar java/target/mcp-1c-structure-0.1.0-all.jar --zip-path /path/to/ОписаниеКонфигурации_Тест.zip
 ```
 
-3. **HTTP indexer** — сервис принимает снимок по HTTP (удобно для выгрузки из внешних систем):
+**Режим HTTP:**
 
 ```bash
-export MCP_1C_STRUCTURE_DATABASE_URL="postgres://..."
-./indexer -http :8080
+java -jar java/target/mcp-1c-structure-0.1.0-all.jar --http
+# порт по умолчанию 8080; другой порт: --http --port 9090 или MCP_HTTP_PORT=9090
 ```
 
-Тело запроса: `POST /import`, Content-Type: `application/json`:
+URL сервиса: `http://localhost:8080/mcp`
 
-```json
-{
-  "meta": { "version": "1.0", "configName": "...", "configVersion": "...", "exportedAt": "...", "source": "...", "objectCount": 0, "indexVersion": 1 },
-  "objects": [ { "id": "...", "type": "...", "name": "...", "synonym": "...", "props": [], "tabularSections": [], "forms": [], "modules": [], "description": "" } ],
-  "relations": [ { "from": "...", "to": "...", "kind": "..." } ]
-}
-```
+## Откуда берутся данные
 
-В ответ — JSON с полями `ok`, `objectCount`, `relationsImported`, `configName`, `configVersion`.
+- **Ленивая загрузка:** если при запуске задан `MCP_1C_STRUCTURE_ZIP_PATH` или `--zip-path` (путь к ZIP-архиву с objects.csv и markdown-файлами), данные читаются при первом вызове любого инструмента, требующего данных.
+- **Явная загрузка:** инструмент **structure_load_rag_zip** — параметр `zipPath`. Можно вызывать для смены архива без перезапуска сервера.
 
-Перед первой загрузкой применить миграции: [goose](https://github.com/pressly/goose) `goose -dir migrations postgres "postgres://..." up` или выполнить вручную `migrations/00001_initial.sql`.
+## Инструменты (Tools)
 
-## Инструменты (API)
+### 1. structure_snapshot_info
 
-| Инструмент | Описание |
-|------------|----------|
-| **structure_snapshot_info** | Информация о снимке: configName, configVersion, exportedAt, source, objectCount. |
-| **structure_search** | Поиск по имени/синониму (подстрока). Параметры: `query` (обязательный), `type`, `limit`, `offset`. |
-| **structure_get_object** | Полное описание объекта по `objectId`. |
-| **structure_find_references** | Входящие и исходящие связи. Параметры: `objectId`, `direction` (incoming/outgoing/both), `kind`, `limit`. |
-| **structure_list_types** | Список типов метаданных и количество объектов по каждому типу. |
-| **structure_import_snapshot** | Загрузить снимок из каталога в БД. Параметр: `snapshotDir` (путь к каталогу с meta.json, objects.json, relations.json). |
+Информация о загруженном снимке структуры.
 
-Ответы в формате JSON в поле content.
+- **Параметры:** нет.
+- **Результат:** configName, source, objectCount, exportedAt и т.п. — общее описание снимка.
+
+### 2. structure_search
+
+Поиск объектов метаданных по запросу.
+
+- **Параметры:**
+  - **query** (обязательный) — строка поиска;
+  - **type** — фильтр по типу (Document, Catalog, Constant и т.д.);
+  - **limit** — макс. количество (по умолчанию 20, макс. 50);
+  - **offset** — смещение для постраничной выборки.
+- **Как ищет:** объединяет векторный поиск (TF-IDF + косинусная близость) и текстовое ранжирование через **RRF** по трём представлениям (objectName, friendlyName, текст).
+- **Результат:** список совпадений с id, type, name, synonym.
+
+### 3. structure_get_object
+
+Полное описание одного объекта по идентификатору.
+
+- **Параметры:**
+  - **objectId** (обязательный) — идентификатор (например, `doc.ЗаказПациента`, `cat.МедицинскиеКарты`).
+- **Результат:** объект со всеми полями, включая **content** — markdown-описание (реквизиты, табличные части и т.д.), если оно есть в выгрузке.
+
+### 4. structure_list_types
+
+Список типов метаданных и количество объектов каждого типа.
+
+- **Параметры:** нет.
+- **Результат:** типы (Document, Catalog, Constant и т.д.) и число объектов по каждому типу.
+
+### 5. structure_load_rag_zip
+
+Загрузить или перезагрузить снимок из ZIP.
+
+- **Параметры:**
+  - **zipPath** (обязательный) — путь к ZIP-архиву в формате RAG (objects.csv + markdown).
+- **Результат:** подтверждение загрузки, objectCount, configName, source. После вызова все остальные инструменты работают уже с новым снимком.
+
+## Формат RAG-ZIP
+
+ZIP-архив должен содержать:
+
+- **objects.csv** — CSV с разделителем `;`, колонки: `Имя объекта`, `Тип объекта`, `Синоним`, `Файл`. В первой колонке может быть формат «Тип.Имя» (например, Справочник.AETitles). Поддерживается BOM в начале файла.
+- **Markdown-файлы** — по одному на объект, путь из колонки «Файл». Содержимое загружается в поле **content** объекта.
+
+Совместимо с выгрузкой из [mcp-1c-v1](https://github.com/FSerg/mcp-1c-v1) (обработка **ПолучитьТекстСтруктурыКонфигурацииФайлами.epf**). Эмбеддинги считаются **своими** (TF-IDF по словарю из объектов), без Qdrant и без внешнего API: при загрузке ZIP строятся два вектора на объект; при поиске — вектор запроса и **RRF в процессе** по трём ранжированиям (objectName, friendlyName, текст).
 
 ## Подключение в Cursor
 
-В настройках MCP укажите команду и путь к бинарнику; задайте `MCP_1C_STRUCTURE_DATABASE_URL` в окружении процесса Cursor/IDE:
+**Локальный процесс (stdio):**
+
+Укажите путь к вашему ZIP-архиву (например, `ОписаниеКонфигурации_Тест.zip`):
 
 ```json
 {
   "mcpServers": {
     "1c-structure": {
-      "command": "/path/to/mcp-1c-structure",
+      "command": "java",
+      "args": ["-jar", "/absolute/path/to/mcp-1c-structure-0.1.0-all.jar"],
       "env": {
-        "MCP_1C_STRUCTURE_DATABASE_URL": "postgres://..."
+        "MCP_1C_STRUCTURE_ZIP_PATH": "/absolute/path/to/ОписаниеКонфигурации_Тест.zip"
       }
     }
   }
 }
 ```
 
-## Формат снимка
+**По URL (если сервер запущен с `--http`):**
 
-- **meta.json** — version, configName, configVersion, exportedAt, source, objectCount, indexVersion.
-- **objects.json** — массив объектов: id, type, name, synonym, props, tabularSections, forms, modules, description.
-- **relations.json** — массив рёбер: from, to, kind.
+```json
+{
+  "mcpServers": {
+    "1c-structure": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
 
-Целостность (from/to в relations должны соответствовать объектам) проверяется при импорте в сервисном слое; в БД внешние ключи не используются.
+При использовании URL путь к архиву задаётся при запуске сервера (`MCP_1C_STRUCTURE_ZIP_PATH` или `--zip-path`).
+
+## Отличия от [mcp-1c-v1](https://github.com/FSerg/mcp-1c-v1)
+
+Оба проекта работают с одной и той же выгрузкой из 1С (ZIP с **objects.csv** и markdown из обработки **ПолучитьТекстСтруктурыКонфигурацииФайлами.epf**). Отличия:
+
+| Аспект | [mcp-1c-v1](https://github.com/FSerg/mcp-1c-v1) | mcp-1c-structure (этот проект) |
+|--------|--------------------------------------------------|---------------------------------|
+| Хранилище | Qdrant (векторная БД) | In-memory |
+| Зависимости | Docker: Embedding Service, Qdrant, Loader (Streamlit), MCP Server | Только JVM и JAR |
+| Загрузка данных | Через веб-интерфейс Loader → эмбеддинги → Qdrant | Путь к ZIP в env/аргументе или **structure_load_rag_zip**; при загрузке строятся TF-IDF векторы в памяти |
+| Поиск | Векторный (внешний API эмбеддингов + RRF по object_name / friendly_name) | Векторный **своими силами**: TF-IDF по словарю из объектов, два представления на объект, косинусная близость + RRF; без внешнего API |
+| Точность | Семантический поиск (нейросеть), лучше на свободные формулировки | По ключевым словам и совпадениям термов; хорош по имени/синониму и по словам из описаний |
+
+**Когда удобнее этот проект:** один JAR, без Docker и без внешнего API эмбеддингов; векторный поиск реализован на TF-IDF и RRF в процессе, подходит для локальной разработки и поиска по ключевым словам и именам.
