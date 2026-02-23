@@ -26,7 +26,6 @@ import static org.junit.jupiter.api.Assertions.*;
 class Mcp1cStructureServerIntegrationTest {
 
     private static final Set<String> EXPECTED_TOOLS = Set.of(
-            "structure_snapshot_info",
             "structure_search",
             "structure_get_object",
             "structure_list_types",
@@ -110,30 +109,17 @@ class Mcp1cStructureServerIntegrationTest {
 
     // --- Уровень протокола: наличие инструментов ---
     @Test
-    void serverExposesFiveStructureTools() throws Exception {
+    void serverExposesFourStructureTools() throws Exception {
         withServer(client -> {
             McpSchema.ListToolsResult list = client.listTools();
             assertNotNull(list);
             assertNotNull(list.tools());
             Set<String> names = list.tools().stream().map(McpSchema.Tool::name).collect(Collectors.toSet());
-            assertEquals(EXPECTED_TOOLS, names, "Ожидаются ровно 5 инструментов: " + names);
+            assertEquals(EXPECTED_TOOLS, names, "Ожидаются ровно 4 инструмента: " + names);
         });
     }
 
     // --- Валидация аргументов ---
-    @Test
-    void structure_snapshot_info_withoutLoad_returnsSummary() throws Exception {
-        withServer(client -> {
-            McpSchema.CallToolResult result = client.callTool(
-                    new McpSchema.CallToolRequest("structure_snapshot_info", Map.of()));
-            assertNotNull(result);
-            String text = getTextContent(result);
-            assertFalse(text.isBlank());
-            assertTrue(text.contains("не загружен") || text.contains("summary") || text.contains("objectCount"),
-                    "Ожидается сообщение о состоянии снимка: " + text.substring(0, Math.min(200, text.length())));
-        });
-    }
-
     @Test
     void structure_search_emptyQuery_returnsError() throws Exception {
         withServer(client -> {
@@ -196,12 +182,6 @@ class Mcp1cStructureServerIntegrationTest {
             assertFalse(loadResult.isError(), getTextContent(loadResult));
             assertTrue(getTextContent(loadResult).contains("загружен") || getTextContent(loadResult).contains("objectCount"),
                     getTextContent(loadResult));
-
-            McpSchema.CallToolResult snapshotResult = client.callTool(
-                    new McpSchema.CallToolRequest("structure_snapshot_info", Map.of()));
-            String snapshotText = getTextContent(snapshotResult);
-            assertTrue(snapshotText.contains("objectCount") || snapshotText.contains("объект"));
-            assertTrue(snapshotText.contains("rag-zip") || snapshotText.contains("1"));
 
             McpSchema.CallToolResult searchResult = client.callTool(
                     new McpSchema.CallToolRequest("structure_search", Map.of("query", "AETitles")));

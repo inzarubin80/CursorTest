@@ -180,34 +180,6 @@ public final class Mcp1cStructureServer {
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
                 .tool(
                         McpSchema.Tool.builder()
-                                .name("structure_snapshot_info")
-                                .title("Информация о снимке")
-                                .description("Информация о загруженном снимке структуры конфигурации 1С: имя, версия, дата выгрузки, число объектов.")
-                                .inputSchema(new McpSchema.JsonSchema("object", Map.of(), List.of(), null, null, null))
-                                .build(),
-                        (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath);
-                            if (err != null && !store.isLoaded()) {
-                                return jsonResult(Map.of("summary", err));
-                            }
-                            Meta meta = store.getMeta();
-                            if (meta == null || (meta.getConfigName() == null && meta.getSource() == null)) {
-                                return jsonResult(Map.of("summary", "Снимок не загружен."));
-                            }
-                            String summary = String.format("Снимок %s %s, %d объектов, выгрузка от %s.",
-                                    meta.getConfigName(), meta.getConfigVersion(), meta.getObjectCount(), meta.getExportedAt());
-                            return jsonResult(Map.of(
-                                    "summary", summary,
-                                    "configName", meta.getConfigName() != null ? meta.getConfigName() : "",
-                                    "configVersion", meta.getConfigVersion() != null ? meta.getConfigVersion() : "",
-                                    "exportedAt", meta.getExportedAt() != null ? meta.getExportedAt() : "",
-                                    "source", meta.getSource() != null ? meta.getSource() : "",
-                                    "objectCount", meta.getObjectCount()
-                            ));
-                        }
-                )
-                .tool(
-                        McpSchema.Tool.builder()
                                 .name("structure_search")
                                 .title("Поиск объектов")
                                 .description("Поиск объектов по имени/синониму (нечёткий поиск). Параметры: query (обязательный), type, limit, offset.")
@@ -342,34 +314,6 @@ public final class Mcp1cStructureServer {
     private static McpSyncServer buildServerHttp(InMemoryStore store, String zipPath, HttpServletStreamableServerTransportProvider httpTransport) {
         return McpServer.sync(httpTransport).serverInfo(NAME, VERSION)
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
-                .tool(
-                        McpSchema.Tool.builder()
-                                .name("structure_snapshot_info")
-                                .title("Информация о снимке")
-                                .description("Информация о загруженном снимке структуры конфигурации 1С: имя, версия, дата выгрузки, число объектов.")
-                                .inputSchema(new McpSchema.JsonSchema("object", Map.of(), List.of(), null, null, null))
-                                .build(),
-                        (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath);
-                            if (err != null && !store.isLoaded()) {
-                                return jsonResult(Map.of("summary", err));
-                            }
-                            Meta meta = store.getMeta();
-                            if (meta == null || (meta.getConfigName() == null && meta.getSource() == null)) {
-                                return jsonResult(Map.of("summary", "Снимок не загружен."));
-                            }
-                            String summary = String.format("Снимок %s %s, %d объектов, выгрузка от %s.",
-                                    meta.getConfigName(), meta.getConfigVersion(), meta.getObjectCount(), meta.getExportedAt());
-                            return jsonResult(Map.of(
-                                    "summary", summary,
-                                    "configName", meta.getConfigName() != null ? meta.getConfigName() : "",
-                                    "configVersion", meta.getConfigVersion() != null ? meta.getConfigVersion() : "",
-                                    "exportedAt", meta.getExportedAt() != null ? meta.getExportedAt() : "",
-                                    "source", meta.getSource() != null ? meta.getSource() : "",
-                                    "objectCount", meta.getObjectCount()
-                            ));
-                        }
-                )
                 .tool(
                         McpSchema.Tool.builder()
                                 .name("structure_search")

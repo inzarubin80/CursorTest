@@ -50,14 +50,7 @@ URL сервиса: `http://localhost:8080/mcp`
 
 ## Инструменты (Tools)
 
-### 1. structure_snapshot_info
-
-Информация о загруженном снимке структуры.
-
-- **Параметры:** нет.
-- **Результат:** configName, source, objectCount, exportedAt и т.п. — общее описание снимка.
-
-### 2. structure_search
+### 1. structure_search
 
 Поиск объектов метаданных по запросу.
 
@@ -69,7 +62,7 @@ URL сервиса: `http://localhost:8080/mcp`
 - **Как ищет:** объединяет векторный поиск (TF-IDF + косинусная близость) и текстовое ранжирование через **RRF** по трём представлениям (objectName, friendlyName, текст).
 - **Результат:** список совпадений с id, type, name, synonym.
 
-### 3. structure_get_object
+### 2. structure_get_object
 
 Полное описание одного объекта по идентификатору.
 
@@ -77,14 +70,14 @@ URL сервиса: `http://localhost:8080/mcp`
   - **objectId** (обязательный) — идентификатор (например, `doc.ЗаказПациента`, `cat.МедицинскиеКарты`).
 - **Результат:** объект со всеми полями, включая **content** — markdown-описание (реквизиты, табличные части и т.д.), если оно есть в выгрузке.
 
-### 4. structure_list_types
+### 3. structure_list_types
 
 Список типов метаданных и количество объектов каждого типа.
 
 - **Параметры:** нет.
 - **Результат:** типы (Document, Catalog, Constant и т.д.) и число объектов по каждому типу.
 
-### 5. structure_load_rag_zip
+### 4. structure_load_rag_zip
 
 Загрузить или перезагрузить снимок из ZIP.
 
@@ -134,6 +127,12 @@ ZIP-архив должен содержать:
 ```
 
 При использовании URL путь к архиву задаётся при запуске сервера (`MCP_1C_STRUCTURE_ZIP_PATH` или `--zip-path`).
+
+### Ошибка «Failed to connect / Connection closed»
+
+- **Пути:** в конфиге MCP должны быть **абсолютные пути** к JAR и (при необходимости) к ZIP. На Mac — что-то вроде `/Users/ВАШ_ЛОГИН/CursorTest/...`, на Linux — `/home/...`. Если указан путь с другой машины (например `/home/ser/...` на Mac), процесс не найдёт JAR и завершится → «Connection closed».
+- **Сборка:** перед первым запуском на этой машине соберите JAR: `cd mcp-1c-structure/java && ./mvnw clean package`. Проверьте, что есть файл `java/target/mcp-1c-structure-0.1.0-all.jar`.
+- **Java:** нужна Java 17+. В терминале: `java -version`.
 
 ## Отличия от [mcp-1c-v1](https://github.com/FSerg/mcp-1c-v1)
 
