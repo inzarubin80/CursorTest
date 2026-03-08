@@ -29,7 +29,7 @@ public final class TfIdfModel {
             float[] v = new float[dimension];
             return v;
         }
-        List<String> terms = TfIdfVectors.tokenize(text);
+        List<String> terms = TfIdfVectors.tokenizeForSearch(text);
         Map<Integer, Double> tf = new HashMap<>();
         for (String t : terms) {
             Integer id = termToId.get(t);

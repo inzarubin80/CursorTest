@@ -13,7 +13,6 @@ import org.eclipse.jetty.ee10.servlet.ServletHolder;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import ru.mcp.structure.snapshot.Meta;
-import ru.mcp.structure.snapshot.RagZipLoader;
 import ru.mcp.structure.snapshot.SnapshotLoader;
 import ru.mcp.structure.snapshot.StructureXmlLoader;
 import ru.mcp.structure.snapshot.StructureObject;
@@ -41,15 +40,14 @@ public final class Mcp1cStructureServer {
     public static void main(String[] args) {
         try {
             int httpPort = parseHttpPort(args);
-            String zipPath = parseZipPath(args);
             String xmlPath = parseXmlPath(args);
             McpJsonMapper jsonMapper = getJsonMapper();
             InMemoryStore store = new InMemoryStore();
 
             if (httpPort > 0) {
-                runHttpMode(jsonMapper, store, zipPath, xmlPath, httpPort);
+                runHttpMode(jsonMapper, store, xmlPath, httpPort);
             } else {
-                runStdioMode(jsonMapper, store, zipPath, xmlPath);
+                runStdioMode(jsonMapper, store, xmlPath);
             }
         } catch (Throwable t) {
             System.err.println("MCP 1C Structure failed to start: " + t.getMessage());
@@ -83,16 +81,6 @@ public final class Mcp1cStructureServer {
         return 0;
     }
 
-    private static String parseZipPath(String[] args) {
-        for (int i = 0; i < args.length; i++) {
-            if ("--zip-path".equals(args[i]) && i + 1 < args.length) {
-                return args[i + 1];
-            }
-        }
-        String env = System.getenv("MCP_1C_STRUCTURE_ZIP_PATH");
-        return env != null && !env.isBlank() ? env.trim() : null;
-    }
-
     private static String parseXmlPath(String[] args) {
         for (int i = 0; i < args.length; i++) {
             if ("--xml-path".equals(args[i]) && i + 1 < args.length) {
@@ -109,19 +97,10 @@ public final class Mcp1cStructureServer {
                 .get();
     }
 
-    /** Ленивая загрузка: если задан путь к ZIP или XML и store пуст — загружаем (ZIP приоритетнее). */
-    private static String ensureLoaded(InMemoryStore store, String zipPath, String xmlPath) {
+    /** Ленивая загрузка: если задан путь к XML и store пуст — загружаем. */
+    private static String ensureLoaded(InMemoryStore store, String xmlPath) {
         if (store.isLoaded()) {
             return null;
-        }
-        if (zipPath != null && !zipPath.isBlank()) {
-            try {
-                SnapshotLoader.Snapshot snapshot = RagZipLoader.load(Path.of(zipPath));
-                store.load(snapshot);
-                return null;
-            } catch (Exception e) {
-                return "Ошибка загрузки ZIP: " + e.getMessage();
-            }
         }
         if (xmlPath != null && !xmlPath.isBlank()) {
             try {
@@ -132,7 +111,7 @@ public final class Mcp1cStructureServer {
                 return "Ошибка загрузки XML: " + e.getMessage();
             }
         }
-        return "Данные не загружены. Задайте MCP_1C_STRUCTURE_ZIP_PATH или MCP_1C_STRUCTURE_XML_PATH (или вызовите structure_load_rag_zip / structure_load_structure_xml).";
+        return "Данные не загружены. Задайте MCP_1C_STRUCTURE_XML_PATH или вызовите structure_load_structure_xml с параметром xmlPath.";
     }
 
     private static McpSchema.CallToolResult jsonResult(Map<String, ?> data) {
@@ -156,13 +135,13 @@ public final class Mcp1cStructureServer {
                 .build();
     }
 
-    private static void runHttpMode(McpJsonMapper jsonMapper, InMemoryStore store, String zipPath, String xmlPath, int port) throws Exception {
+    private static void runHttpMode(McpJsonMapper jsonMapper, InMemoryStore store, String xmlPath, int port) throws Exception {
         HttpServletStreamableServerTransportProvider httpTransport = HttpServletStreamableServerTransportProvider.builder()
                 .jsonMapper(jsonMapper)
                 .mcpEndpoint(MCP_ENDPOINT)
                 .build();
 
-        McpSyncServer server = buildServerHttp(store, zipPath, xmlPath, httpTransport);
+        McpSyncServer server = buildServerHttp(store, xmlPath, httpTransport);
 
         Server jetty = new Server();
         ServerConnector connector = new ServerConnector(jetty);
@@ -186,9 +165,9 @@ public final class Mcp1cStructureServer {
         jetty.join();
     }
 
-    private static void runStdioMode(McpJsonMapper jsonMapper, InMemoryStore store, String zipPath, String xmlPath) throws InterruptedException {
+    private static void runStdioMode(McpJsonMapper jsonMapper, InMemoryStore store, String xmlPath) throws InterruptedException {
         StdioServerTransportProvider transport = new StdioServerTransportProvider(jsonMapper);
-        McpSyncServer server = buildServerStdio(store, zipPath, xmlPath, transport);
+        McpSyncServer server = buildServerStdio(store, xmlPath, transport);
         try {
             Thread.currentThread().join();
         } catch (InterruptedException e) {
@@ -197,7 +176,7 @@ public final class Mcp1cStructureServer {
         }
     }
 
-    private static McpSyncServer buildServerStdio(InMemoryStore store, String zipPath, String xmlPath, StdioServerTransportProvider transport) {
+    private static McpSyncServer buildServerStdio(InMemoryStore store, String xmlPath, StdioServerTransportProvider transport) {
         return McpServer.sync(transport).serverInfo(NAME, VERSION)
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
                 .tool(
@@ -213,7 +192,7 @@ public final class Mcp1cStructureServer {
                                 ), List.of("query"), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath, xmlPath);
+                            String err = ensureLoaded(store, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -257,7 +236,7 @@ public final class Mcp1cStructureServer {
                                 ), List.of("objectId"), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath, xmlPath);
+                            String err = ensureLoaded(store, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -274,7 +253,7 @@ public final class Mcp1cStructureServer {
                             return jsonResult(Map.of(
                                     "summary", "Объект " + obj.getName() + ".",
                                     "object", obj,
-                                    "source", "rag-zip"
+                                    "source", "structure-xml"
                             ));
                         }
                 )
@@ -288,7 +267,7 @@ public final class Mcp1cStructureServer {
                                 ), List.of("objectId"), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath, xmlPath);
+                            String err = ensureLoaded(store, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -322,7 +301,7 @@ public final class Mcp1cStructureServer {
                                 .inputSchema(new McpSchema.JsonSchema("object", Map.of(), List.of(), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath, xmlPath);
+                            String err = ensureLoaded(store, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -334,39 +313,6 @@ public final class Mcp1cStructureServer {
                                     "summary", "Типы метаданных в снимке.",
                                     "types", types
                             ));
-                        }
-                )
-                .tool(
-                        McpSchema.Tool.builder()
-                                .name("structure_load_rag_zip")
-                                .title("Загрузить RAG-ZIP снимок")
-                                .description("Загрузить снимок из ZIP в формате mcp-1c-v1: objects.csv (Имя объекта;Тип объекта;Синоним;Файл) и markdown-файлы с описаниями. Всё в памяти, без векторной БД. Параметр: zipPath.")
-                                .inputSchema(new McpSchema.JsonSchema("object", Map.of(
-                                        "zipPath", Map.of("type", "string", "description", "Путь к ZIP-архиву выгрузки из 1С (формат ПолучитьТекстСтруктурыКонфигурацииФайлами.epf)")
-                                ), List.of("zipPath"), null, null, null))
-                                .build(),
-                        (exchange, arguments) -> {
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> args = arguments instanceof Map ? (Map<String, Object>) arguments : Map.of();
-                            String toLoad = args.get("zipPath") != null ? args.get("zipPath").toString().trim() : "";
-                            if (toLoad.isEmpty()) {
-                                return errResult("zipPath обязателен — путь к ZIP-архиву с objects.csv и markdown-файлами");
-                            }
-                            try {
-                                SnapshotLoader.Snapshot snapshot = RagZipLoader.load(Path.of(toLoad));
-                                store.load(snapshot);
-                                Meta meta = snapshot.getMeta();
-                                String summary = String.format("RAG-ZIP загружен: объектов %d (описания в памяти, поиск по имени/синониму).",
-                                        snapshot.getObjects().size());
-                                return jsonResult(Map.of(
-                                        "summary", summary,
-                                        "objectCount", snapshot.getObjects().size(),
-                                        "configName", meta.getConfigName() != null ? meta.getConfigName() : "",
-                                        "source", meta.getSource() != null ? meta.getSource() : "rag-zip"
-                                ));
-                            } catch (Exception e) {
-                                return errResult("Загрузка RAG-ZIP: " + e.getMessage());
-                            }
                         }
                 )
                 .tool(
@@ -408,7 +354,7 @@ public final class Mcp1cStructureServer {
                 .build();
     }
 
-    private static McpSyncServer buildServerHttp(InMemoryStore store, String zipPath, String xmlPath, HttpServletStreamableServerTransportProvider httpTransport) {
+    private static McpSyncServer buildServerHttp(InMemoryStore store, String xmlPath, HttpServletStreamableServerTransportProvider httpTransport) {
         return McpServer.sync(httpTransport).serverInfo(NAME, VERSION)
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
                 .tool(
@@ -424,7 +370,7 @@ public final class Mcp1cStructureServer {
                                 ), List.of("query"), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath, xmlPath);
+                            String err = ensureLoaded(store, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -468,7 +414,7 @@ public final class Mcp1cStructureServer {
                                 ), List.of("objectId"), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath, xmlPath);
+                            String err = ensureLoaded(store, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -485,7 +431,7 @@ public final class Mcp1cStructureServer {
                             return jsonResult(Map.of(
                                     "summary", "Объект " + obj.getName() + ".",
                                     "object", obj,
-                                    "source", "rag-zip"
+                                    "source", "structure-xml"
                             ));
                         }
                 )
@@ -499,7 +445,7 @@ public final class Mcp1cStructureServer {
                                 ), List.of("objectId"), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath, xmlPath);
+                            String err = ensureLoaded(store, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -533,7 +479,7 @@ public final class Mcp1cStructureServer {
                                 .inputSchema(new McpSchema.JsonSchema("object", Map.of(), List.of(), null, null, null))
                                 .build(),
                         (exchange, arguments) -> {
-                            String err = ensureLoaded(store, zipPath, xmlPath);
+                            String err = ensureLoaded(store, xmlPath);
                             if (err != null && !store.isLoaded()) {
                                 return errResult(err);
                             }
@@ -545,39 +491,6 @@ public final class Mcp1cStructureServer {
                                     "summary", "Типы метаданных в снимке.",
                                     "types", types
                             ));
-                        }
-                )
-                .tool(
-                        McpSchema.Tool.builder()
-                                .name("structure_load_rag_zip")
-                                .title("Загрузить RAG-ZIP снимок")
-                                .description("Загрузить снимок из ZIP в формате mcp-1c-v1: objects.csv (Имя объекта;Тип объекта;Синоним;Файл) и markdown-файлы с описаниями. Всё в памяти, без векторной БД. Параметр: zipPath.")
-                                .inputSchema(new McpSchema.JsonSchema("object", Map.of(
-                                        "zipPath", Map.of("type", "string", "description", "Путь к ZIP-архиву выгрузки из 1С (формат ПолучитьТекстСтруктурыКонфигурацииФайлами.epf)")
-                                ), List.of("zipPath"), null, null, null))
-                                .build(),
-                        (exchange, arguments) -> {
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> args = arguments instanceof Map ? (Map<String, Object>) arguments : Map.of();
-                            String toLoad = args.get("zipPath") != null ? args.get("zipPath").toString().trim() : "";
-                            if (toLoad.isEmpty()) {
-                                return errResult("zipPath обязателен — путь к ZIP-архиву с objects.csv и markdown-файлами");
-                            }
-                            try {
-                                SnapshotLoader.Snapshot snapshot = RagZipLoader.load(Path.of(toLoad));
-                                store.load(snapshot);
-                                Meta meta = snapshot.getMeta();
-                                String summary = String.format("RAG-ZIP загружен: объектов %d (описания в памяти, поиск по имени/синониму).",
-                                        snapshot.getObjects().size());
-                                return jsonResult(Map.of(
-                                        "summary", summary,
-                                        "objectCount", snapshot.getObjects().size(),
-                                        "configName", meta.getConfigName() != null ? meta.getConfigName() : "",
-                                        "source", meta.getSource() != null ? meta.getSource() : "rag-zip"
-                                ));
-                            } catch (Exception e) {
-                                return errResult("Загрузка RAG-ZIP: " + e.getMessage());
-                            }
                         }
                 )
                 .tool(

@@ -20,7 +20,7 @@ public final class StructureObject {
     /** Для документов — id регистров, в которые документ может делать записи (движения). */
     private List<String> movements;
     private String description;
-    /** Полное текстовое описание объекта (markdown), например из выгрузки RAG-формата (ZIP с objects.csv + md). */
+    /** Полное текстовое описание объекта (markdown), если доступно. */
     private String content;
     /** Тип значения константы (только для type=Constant), например «Строка», «Число», «Документ.Заказ». */
     private String valueType;

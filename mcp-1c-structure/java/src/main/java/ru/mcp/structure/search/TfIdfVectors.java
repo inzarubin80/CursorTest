@@ -6,16 +6,24 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Построение TF-IDF векторов для объектов без внешнего API эмбеддингов.
  * Два представления на объект: «имя + синоним» и «тип + синоним» (или начало content) для RRF.
+ * Поддержка: разбиение CamelCase, стоп-слова.
  */
 public final class TfIdfVectors {
 
     private static final int MIN_TERM_LENGTH = 2;
     private static final int MAX_VOCAB_SIZE = 10_000;
     private static final int CONTENT_SNIPPET_CHARS = 500;
+
+    /** Стоп-слова (русские и английские) — не попадают в словарь. */
+    private static final Set<String> STOP_WORDS = Set.of(
+            "в", "на", "не", "по", "для", "как", "это", "все", "его", "при", "или", "без", "под", "над", "из", "со", "до", "от",
+            "the", "and", "for", "are", "but", "not", "you", "all", "can", "had", "her", "was", "one", "our", "out", "has", "him", "how", "its", "may", "new", "now", "old", "see", "way", "who", "did", "get", "got", "let", "put", "say", "she", "too", "use"
+    );
 
     /**
      * Строит словарь по всем объектам, заполняет у каждого объекта embeddingObjectName и embeddingFriendlyName.
@@ -29,6 +37,7 @@ public final class TfIdfVectors {
         }
 
         // Тексты для подсчёта document frequency: по два на объект (name+synonym, type+synonym/content)
+        // splitCamelCase чтобы "ЗаказПациента" дало токены "заказ", "пациента"
         List<List<String>> docs = new ArrayList<>();
         for (StructureObject o : objects) {
             String textA = concat(o.getName(), o.getSynonym());
@@ -39,8 +48,8 @@ public final class TfIdfVectors {
                         ? content.substring(0, CONTENT_SNIPPET_CHARS) : content;
                 textB = textB + " " + snippet;
             }
-            docs.add(tokenize(textA));
-            docs.add(tokenize(textB));
+            docs.add(tokenizeForSearch(textA));
+            docs.add(tokenizeForSearch(textB));
         }
 
         // Document frequency по всем терминам
@@ -50,6 +59,9 @@ public final class TfIdfVectors {
                 df.merge(t, 1, Integer::sum);
             }
         }
+
+        // Убираем стоп-слова из словаря
+        df.keySet().removeIf(t -> STOP_WORDS.contains(t.toLowerCase()));
 
         // Ограничиваем словарь по частоте (берём самые частые до MAX_VOCAB_SIZE)
         List<Map.Entry<String, Integer>> sorted = new ArrayList<>(df.entrySet());
@@ -90,6 +102,35 @@ public final class TfIdfVectors {
         if (x.isEmpty()) return y;
         if (y.isEmpty()) return x;
         return x + " " + y;
+    }
+
+    /**
+     * Разбивает CamelCase и точки: "ЗаказПациента" → "Заказ Пациента", "doc.Заказ" → "doc Заказ".
+     * Пробел вставляется перед заглавной буквой, если перед ней строчная/цифра/подчёркивание, и после точки.
+     */
+    public static String splitCamelCase(String s) {
+        if (s == null || s.isEmpty()) return s;
+        StringBuilder out = new StringBuilder(s.length() + 8);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '.') {
+                out.append(' ');
+                continue;
+            }
+            if (i > 0 && Character.isUpperCase(c)) {
+                char prev = s.charAt(i - 1);
+                if (Character.isLowerCase(prev) || Character.isDigit(prev) || prev == '_') {
+                    out.append(' ');
+                }
+            }
+            out.append(c);
+        }
+        return out.toString();
+    }
+
+    /** Токенизация с предварительным разбиением CamelCase (для запроса и для имени/синонима при поиске). */
+    public static List<String> tokenizeForSearch(String text) {
+        return tokenize(splitCamelCase(text));
     }
 
     static List<String> tokenize(String text) {

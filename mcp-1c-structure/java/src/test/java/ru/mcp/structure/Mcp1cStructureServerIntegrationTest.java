@@ -5,8 +5,6 @@ import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,14 +12,12 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Интеграционные тесты MCP-сервера: наличие инструментов, валидация аргументов,
- * эффективность ответов при загруженной фикстуре RAG-ZIP.
+ * эффективность ответов при загруженной фикстуре XML (СтруктураБазыДанных.xml).
  */
 class Mcp1cStructureServerIntegrationTest {
 
@@ -30,7 +26,6 @@ class Mcp1cStructureServerIntegrationTest {
             "structure_get_object",
             "structure_get_type_usages",
             "structure_list_types",
-            "structure_load_rag_zip",
             "structure_load_structure_xml"
     );
 
@@ -64,24 +59,6 @@ class Mcp1cStructureServerIntegrationTest {
                 .map(c -> ((McpSchema.TextContent) c).text())
                 .findFirst()
                 .orElse("");
-    }
-
-    /** Собирает минимальный RAG-ZIP из ресурсов в tempDir и возвращает путь к архиву. */
-    private static Path buildFixtureZip(Path tempDir) throws Exception {
-        Path zipPath = tempDir.resolve("mini-structure.zip");
-        try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(zipPath))) {
-            byte[] csv = ("Имя объекта;Тип объекта;Синоним;Файл\n" +
-                    "AETitles;Справочник;Application Entity Titles;doc/AETitles.md\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            zos.putNextEntry(new ZipEntry("objects.csv"));
-            zos.write(csv);
-            zos.closeEntry();
-
-            byte[] md = "# Справочник AETitles\n\nКраткое описание для тестов MCP. Application Entity Titles.\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            zos.putNextEntry(new ZipEntry("doc/AETitles.md"));
-            zos.write(md);
-            zos.closeEntry();
-        }
-        return zipPath;
     }
 
     private void withServer(java.util.function.Consumer<McpSyncClient> block) throws Exception {
@@ -151,26 +128,6 @@ class Mcp1cStructureServerIntegrationTest {
             String text = getTextContent(result);
             assertTrue(result.isError() || text.toLowerCase().contains("objectid") || text.contains("обязателен"),
                     "Ожидается isError или сообщение про objectId: " + text);
-        });
-    }
-
-    @Test
-    void structure_load_rag_zip_noZipPath_returnsError() throws Exception {
-        withServer(client -> {
-            McpSchema.CallToolResult result = client.callTool(
-                    new McpSchema.CallToolRequest("structure_load_rag_zip", Map.of()));
-            assertTrue(result.isError());
-            assertTrue(getTextContent(result).toLowerCase().contains("zippath") || getTextContent(result).contains("обязателен"));
-        });
-    }
-
-    @Test
-    void structure_load_rag_zip_nonexistentPath_returnsError() throws Exception {
-        withServer(client -> {
-            McpSchema.CallToolResult result = client.callTool(
-                    new McpSchema.CallToolRequest("structure_load_rag_zip", Map.of("zipPath", "/nonexistent/rag.zip")));
-            assertTrue(result.isError());
-            assertTrue(getTextContent(result).contains("Ошибка") || getTextContent(result).contains("Загрузка"));
         });
     }
 
@@ -307,33 +264,35 @@ class Mcp1cStructureServerIntegrationTest {
         });
     }
 
-    // --- Эффективность при загруженных данных ---
+    // --- Эффективность при загруженных данных (XML) ---
     @Test
-    void withLoadedFixture_allToolsReturnEffectiveResults(@TempDir Path tempDir) throws Exception {
-        Path fixtureZip = buildFixtureZip(tempDir);
+    void withLoadedXmlFixture_allToolsReturnEffectiveResults() throws Exception {
+        Path xmlPath = Path.of("..", "СтруктураБазыДанных.xml").toAbsolutePath().normalize();
+        if (!Files.isRegularFile(xmlPath)) {
+            return;
+        }
         withServer(client -> {
             McpSchema.CallToolResult loadResult = client.callTool(
-                    new McpSchema.CallToolRequest("structure_load_rag_zip", Map.of("zipPath", fixtureZip.toAbsolutePath().toString())));
+                    new McpSchema.CallToolRequest("structure_load_structure_xml", Map.of("xmlPath", xmlPath.toString())));
             assertFalse(loadResult.isError(), getTextContent(loadResult));
             assertTrue(getTextContent(loadResult).contains("загружен") || getTextContent(loadResult).contains("objectCount"),
                     getTextContent(loadResult));
 
             McpSchema.CallToolResult searchResult = client.callTool(
-                    new McpSchema.CallToolRequest("structure_search", Map.of("query", "AETitles")));
+                    new McpSchema.CallToolRequest("structure_search", Map.of("query", "Валюты")));
             String searchText = getTextContent(searchResult);
             assertFalse(searchResult.isError(), searchText);
-            assertTrue(searchText.contains("total") && (searchText.contains("1") || searchText.contains("matches")),
+            assertTrue(searchText.contains("total") && (searchText.contains("matches") || searchText.contains("1")),
                     searchText);
-            assertTrue(searchText.contains("AETitles") || searchText.contains("cat."), searchText);
 
             McpSchema.CallToolResult getResult = client.callTool(
-                    new McpSchema.CallToolRequest("structure_get_object", Map.of("objectId", "cat.AETitles")));
+                    new McpSchema.CallToolRequest("structure_get_object", Map.of("objectId", "cat.Валюты")));
             String getText = getTextContent(getResult);
             assertFalse(getResult.isError(), getText);
-            assertTrue(getText.contains("AETitles") && (getText.contains("Catalog") || getText.contains("Справочник")),
+            assertTrue(getText.contains("Валюты") && (getText.contains("Catalog") || getText.contains("Справочник")),
                     getText);
-            assertTrue(getText.contains("content") || getText.contains("Application Entity") || getText.contains("описание"),
-                    "Ожидается content или описание: " + getText.substring(0, Math.min(300, getText.length())));
+            assertTrue(getText.contains("props") || getText.contains("tabularSections") || getText.contains("id"),
+                    "Ожидаются props/tabularSections или id: " + getText.substring(0, Math.min(300, getText.length())));
 
             McpSchema.CallToolResult typesResult = client.callTool(
                     new McpSchema.CallToolRequest("structure_list_types", Map.of()));

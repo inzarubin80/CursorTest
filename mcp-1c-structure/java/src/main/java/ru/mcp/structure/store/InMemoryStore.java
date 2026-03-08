@@ -10,14 +10,15 @@ import ru.mcp.structure.search.TfIdfVectors;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * Хранилище снимка структуры 1С в памяти. Поддерживает поиск: при загрузке из RAG-ZIP
- * строятся TF-IDF векторы (два на объект: имя+синоним и тип+синоним/контент), поиск — косинусная близость + RRF.
- * Без внешнего API эмбеддингов.
+ * Хранилище снимка структуры 1С в памяти. Данные загружаются из XML (СтруктураБазыДанных.xml).
+ * Поддерживает нечёткий поиск по имени/синониму.
  */
 public final class InMemoryStore {
 
@@ -92,31 +93,39 @@ public final class InMemoryStore {
         if (candidates.isEmpty()) {
             return new SearchResult(0, List.of());
         }
+        List<String> queryTerms = TfIdfVectors.tokenizeForSearch(q);
         double[] cosName = new double[candidates.size()];
         double[] cosFriendly = new double[candidates.size()];
         double[] textScore = new double[candidates.size()];
+        double[] overlapScore = new double[candidates.size()];
         for (int i = 0; i < candidates.size(); i++) {
             StructureObject o = candidates.get(i);
             cosName[i] = cosine(queryVec, o.getEmbeddingObjectName());
             cosFriendly[i] = cosine(queryVec, o.getEmbeddingFriendlyName());
             textScore[i] = textScoreForQuery(q, o);
+            overlapScore[i] = tokenOverlapScore(queryTerms, o);
         }
         int[] rankByName = argsortDesc(cosName);
         int[] rankByFriendly = argsortDesc(cosFriendly);
         int[] rankByText = argsortDesc(textScore);
+        int[] rankByOverlap = argsortDesc(overlapScore);
         int[] rankPosByName = new int[candidates.size()];
         int[] rankPosByFriendly = new int[candidates.size()];
         int[] rankPosByText = new int[candidates.size()];
+        int[] rankPosByOverlap = new int[candidates.size()];
         for (int r = 0; r < rankByName.length; r++) {
             rankPosByName[rankByName[r]] = r;
             rankPosByFriendly[rankByFriendly[r]] = r;
             rankPosByText[rankByText[r]] = r;
+            rankPosByOverlap[rankByOverlap[r]] = r;
         }
         List<ScoredObject> scored = new ArrayList<>();
         for (int i = 0; i < candidates.size(); i++) {
-            double rrf = 1.0 / (RRF_K + rankPosByName[i] + 1)
+            // Двойной вес ранга по имени; четвёртый сигнал — доля совпавших токенов
+            double rrf = 2.0 / (RRF_K + rankPosByName[i] + 1)
                     + 1.0 / (RRF_K + rankPosByFriendly[i] + 1)
-                    + 1.0 / (RRF_K + rankPosByText[i] + 1);
+                    + 1.0 / (RRF_K + rankPosByText[i] + 1)
+                    + 1.0 / (RRF_K + rankPosByOverlap[i] + 1);
             scored.add(new ScoredObject(candidates.get(i), rrf));
         }
         scored.sort(Comparator.comparingDouble((ScoredObject s) -> s.score).reversed());
@@ -128,6 +137,17 @@ public final class InMemoryStore {
             page.add(scored.get(i).obj);
         }
         return new SearchResult(total, page);
+    }
+
+    /** Доля токенов запроса, встретившихся в имени/синониме объекта (для RRF). */
+    private static double tokenOverlapScore(List<String> queryTerms, StructureObject o) {
+        if (queryTerms == null || queryTerms.isEmpty()) return 0;
+        String name = o.getName() != null ? o.getName() : "";
+        String synonym = o.getSynonym() != null ? o.getSynonym() : "";
+        List<String> objectTerms = TfIdfVectors.tokenizeForSearch(name + " " + synonym);
+        Set<String> objectSet = new HashSet<>(objectTerms);
+        long matched = queryTerms.stream().filter(objectSet::contains).count();
+        return (double) matched / queryTerms.size();
     }
 
     /** Оценка по тексту (подстрока + Левенштейн) для использования в RRF. */
